@@ -18,6 +18,7 @@ interface CampaignContextType {
     tiposDeCompra: string[];
     campanhas: string[];
     numerosPi: string[];
+    clientes: string[];
   };
 }
 
@@ -60,34 +61,15 @@ export const CampaignProvider = ({ children }: CampaignProviderProps) => {
         ]);
 
 
-        // Campanhas excluídas do dashboard
-        const excludedCampaigns = ['BRB BANCO', 'BRB Banco', 'BRB CONARH'];
+        // Usa todos os dados sem filtrar campanhas específicas
+        const filteredCampaignData = campaignData;
 
-        // Log Google Search antes da filtragem
-        const googleSearchBeforeFilter = campaignData.filter(item => item.veiculo === 'Google Search');
-        console.log(`Google Search ANTES da filtragem de campanhas: ${googleSearchBeforeFilter.length}`);
-        const clicksBeforeFilter = googleSearchBeforeFilter.reduce((sum, item) => sum + item.clicks, 0);
-        console.log(`Clicks Google Search ANTES da filtragem: ${clicksBeforeFilter}`);
-
-        // Filtra campanhas excluídas
-        const filteredCampaignData = campaignData.filter(
-          item => !excludedCampaigns.includes(item.campanha)
-        );
-
-        // Normaliza números de PI removendo zeros à esquerda e corrige PI '20390' para '20392'
-        const correctedCampaignData = filteredCampaignData.map(item => {
+        // Normaliza números de PI removendo zeros à esquerda
+        const normalizedData = filteredCampaignData.map(item => {
           let normalizedPI = item.numeroPi;
-
-          // Remove zeros à esquerda do PI
           if (normalizedPI) {
             normalizedPI = normalizedPI.replace(/^0+/, '') || '0';
           }
-
-          // Corrige PI específico
-          if (normalizedPI === '20390') {
-            normalizedPI = '20392';
-          }
-
           return {
             ...item,
             numeroPi: normalizedPI
@@ -95,16 +77,10 @@ export const CampaignProvider = ({ children }: CampaignProviderProps) => {
         });
 
         // Calcula investimento real para cada item
-        const dataWithRealInvestment = correctedCampaignData.map(item => ({
+        const dataWithRealInvestment = normalizedData.map(item => ({
           ...item,
           realInvestment: calculateRealInvestment(item, pricingData)
         }));
-
-        // Log para debug do Google Search
-        const googleSearchData = dataWithRealInvestment.filter(item => item.veiculo === 'Google Search');
-        console.log(`Total de registros Google Search carregados: ${googleSearchData.length}`);
-        const totalClicks = googleSearchData.reduce((sum, item) => sum + item.clicks, 0);
-        console.log(`Total de clicks Google Search: ${totalClicks}`);
 
         setData(dataWithRealInvestment);
         setFilteredData(dataWithRealInvestment);
@@ -207,7 +183,8 @@ export const CampaignProvider = ({ children }: CampaignProviderProps) => {
     veiculos: Array.from(new Set(data.map(d => d.veiculo).filter(Boolean))),
     tiposDeCompra: Array.from(new Set(data.map(d => d.tipoDeCompra).filter(Boolean))),
     campanhas: Array.from(new Set(data.map(d => d.campanha).filter(Boolean))),
-    numerosPi: Array.from(new Set(data.map(d => d.numeroPi).filter(Boolean)))
+    numerosPi: Array.from(new Set(data.map(d => d.numeroPi).filter(Boolean))),
+    clientes: Array.from(new Set(data.map(d => d.cliente).filter(Boolean)))
   };
 
   return (

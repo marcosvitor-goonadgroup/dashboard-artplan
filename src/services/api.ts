@@ -2,10 +2,7 @@ import axios from 'axios';
 import { ApiResponse, ProcessedCampaignData, ProcessedSearchData, PricingTableRow } from '../types/campaign';
 import { parse } from 'date-fns';
 
-const API_URLS = [
-  'https://nmbcoamazonia-api.vercel.app/google/sheets/1HykUxjCGGdveDS_5vlLOOkAq7Wkl058453xkYGTAzNM/data?range=Consolidado',
-  'https://nmbcoamazonia-api.vercel.app/google/sheets/1abcar-ESRB_f8ytKGQ_ru_slZ67cXhjxKt8gL7TrEVw/data?range=Consolidado'
-];
+const API_URL = 'https://nmbcoamazonia-api.vercel.app/google/sheets/1CV-RGsN7QWeQjhtQ8NOLAUoPtfpf4J60uOKTdzqNNl8/data?range=Consolidado';
 
 const SEARCH_API_URLS = [
   'https://nmbcoamazonia-api.vercel.app/google/sheets/1abcar-ESRB_f8ytKGQ_ru_slZ67cXhjxKt8gL7TrEVw/data?range=Search',
@@ -63,69 +60,52 @@ const normalizeVeiculo = (veiculo: string): string => {
 
 export const fetchCampaignData = async (): Promise<ProcessedCampaignData[]> => {
   try {
-    const responses = await Promise.all(
-      API_URLS.map(url => axios.get<ApiResponse>(url))
-    );
+    const response = await axios.get<ApiResponse>(API_URL);
 
     const allData: ProcessedCampaignData[] = [];
-    let googleSearchCount = 0;
 
-    responses.forEach((response, apiIndex) => {
-      const apiUrl = API_URLS[apiIndex];
-      console.log(`Processando API ${apiIndex + 1}: ${apiUrl}`);
+    if (response.data.success && response.data.data.values.length > 1) {
+      const rows = response.data.data.values.slice(1);
 
-      if (response.data.success && response.data.data.values.length > 1) {
-        const rows = response.data.data.values.slice(1);
-        let googleSearchInApi = 0;
+      rows.forEach(row => {
+        if (row.length >= 19) {
+          const numeroPi = row[18] || '';
+          const veiculoRaw = row[14] || '';
+          const veiculo = normalizeVeiculo(veiculoRaw);
+          const cliente = row[19] || '';
 
-        rows.forEach(row => {
-          if (row.length >= 18) { // Reduzi de 19 para 18 para aceitar linhas sem Número PI
-            const numeroPi = row[18] || '';
-            const veiculoRaw = row[14] || '';
-            const veiculo = normalizeVeiculo(veiculoRaw);
-
-            // Debug: log linhas do Google Search
-            if (veiculoRaw.toLowerCase().includes('google') || veiculoRaw === 'Google Search') {
-              googleSearchInApi++;
-              googleSearchCount++;
-            }
-
-            // Ignora linhas onde o Número PI é "#VALUE!", EXCETO para Google Search
-            if (numeroPi === '#VALUE!' && veiculo !== 'Google Search') {
-              console.log('Ignorando linha com #VALUE! que não é Google Search:', veiculo);
-              return;
-            }
-
-            const dataRow: ProcessedCampaignData = {
-              date: parseDate(row[0]),
-              campaignName: row[1] || '',
-              adSetName: row[2] || '',
-              adName: row[3] || '',
-              cost: parseNumber(row[4]),
-              impressions: parseNumber(row[5]),
-              reach: parseNumber(row[6]),
-              clicks: parseNumber(row[7]),
-              videoViews: parseNumber(row[8]),
-              videoViews25: parseNumber(row[9]),
-              videoViews50: parseNumber(row[10]),
-              videoViews75: parseNumber(row[11]),
-              videoCompletions: parseNumber(row[12]),
-              totalEngagements: parseNumber(row[13]),
-              veiculo: veiculo,
-              tipoDeCompra: row[15] || '',
-              videoEstaticoAudio: row[16] || '',
-              campanha: row[17] || '',
-              numeroPi: numeroPi
-            };
-            allData.push(dataRow);
+          // Ignora linhas onde o Número PI é "#VALUE!", EXCETO para Google Search
+          if (numeroPi === '#VALUE!' && veiculo !== 'Google Search') {
+            return;
           }
-        });
 
-        console.log(`API ${apiIndex + 1} - Google Search encontrados: ${googleSearchInApi}`);
-      }
-    });
+          const dataRow: ProcessedCampaignData = {
+            date: parseDate(row[0]),
+            campaignName: row[1] || '',
+            adSetName: row[2] || '',
+            adName: row[3] || '',
+            cost: parseCurrency(row[4]),
+            impressions: parseNumber(row[5]),
+            reach: parseNumber(row[6]),
+            clicks: parseNumber(row[7]),
+            videoViews: parseNumber(row[8]),
+            videoViews25: parseNumber(row[9]),
+            videoViews50: parseNumber(row[10]),
+            videoViews75: parseNumber(row[11]),
+            videoCompletions: parseNumber(row[12]),
+            totalEngagements: parseNumber(row[13]),
+            veiculo: veiculo,
+            tipoDeCompra: row[15] || '',
+            videoEstaticoAudio: row[16] || '',
+            campanha: row[17] || '',
+            numeroPi: numeroPi,
+            cliente: cliente
+          };
+          allData.push(dataRow);
+        }
+      });
+    }
 
-    console.log(`Total de linhas Google Search encontradas em todas as APIs: ${googleSearchCount}`);
     return allData;
   } catch (error) {
     console.error('Erro ao buscar dados das campanhas:', error);
@@ -209,23 +189,24 @@ export const convertSearchDataToCampaignData = (searchData: ProcessedSearchData[
   return searchData.map(item => ({
     date: item.date,
     campaignName: item.campaignName,
-    adSetName: item.searchTerm, // Usa o termo de busca como Ad Set
-    adName: item.searchTerm, // Usa o termo de busca como Ad Name
+    adSetName: item.searchTerm,
+    adName: item.searchTerm,
     cost: item.cost,
     impressions: item.impressions,
-    reach: 0, // Google Search não tem reach
+    reach: 0,
     clicks: item.clicks,
-    videoViews: 0, // Google Search não tem video views
+    videoViews: 0,
     videoViews25: 0,
     videoViews50: 0,
     videoViews75: 0,
     videoCompletions: 0,
-    totalEngagements: 0, // Google Search não tem engajamento
+    totalEngagements: 0,
     veiculo: 'Google Search',
-    tipoDeCompra: 'CPC', // Google Search usa CPC
+    tipoDeCompra: 'CPC',
     videoEstaticoAudio: '',
     campanha: item.campanha,
-    numeroPi: '' // Google Search não tem número PI
+    numeroPi: '',
+    cliente: ''
   }));
 };
 

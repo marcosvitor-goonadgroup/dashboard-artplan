@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { ProcessedCampaignData } from '../types/campaign';
-import { generateCreativeAnalysis } from '../services/gemini';
+import { generateCreativeAnalysis } from '../services/openai';
 import { getAnalysisHistory, getAnalysisByDate } from '../services/cache';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';

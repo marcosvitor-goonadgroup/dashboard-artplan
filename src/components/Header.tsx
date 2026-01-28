@@ -1,4 +1,4 @@
-import logobrb from '../images/logo-brb.png';
+import logoArtplan from '../images/logo-artplan.png';
 
 interface HeaderProps {
   onOpenFilters: () => void;
@@ -14,8 +14,8 @@ const Header = ({ onOpenFilters, onClearFilters, activeFiltersCount }: HeaderPro
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2 sm:space-x-4">
               <img
-                src={logobrb}
-                alt="Banco BRB"
+                src={logoArtplan}
+                alt="Artplan"
                 className="h-8 sm:h-12 w-auto"
               />
               <div className="border-l border-gray-300 pl-2 sm:pl-4">

@@ -49,6 +49,7 @@ export interface ProcessedCampaignData {
   videoEstaticoAudio: string;
   campanha: string;
   numeroPi: string;
+  cliente: string;
   realInvestment?: number; // Investimento calculado pela tabela de preços
 }
 

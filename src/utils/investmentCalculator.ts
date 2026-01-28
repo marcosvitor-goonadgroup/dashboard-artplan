@@ -10,17 +10,28 @@ export const calculateRealInvestment = (
   data: ProcessedCampaignData,
   pricingTable: PricingTableRow[]
 ): number => {
+  const tipoDeCompraUpper = data.tipoDeCompra.toUpperCase();
+
+  // Cálculo específico para Facebook e Instagram
+  if (data.veiculo === 'Facebook' || data.veiculo === 'Instagram') {
+    if (tipoDeCompraUpper === 'CPL') {
+      // CPL = R$ 52,00 por lead (usando clicks como proxy para leads)
+      return data.clicks * 52.00;
+    }
+    if (tipoDeCompraUpper === 'CPC') {
+      // CPC = R$ 15,00 por clique
+      return data.clicks * 15.00;
+    }
+  }
+
   // Cálculo específico para Google Search: Clicks × R$ 56,88
   if (data.veiculo === 'Google Search') {
-    const realInvestment = data.clicks * 56.88;
-    return realInvestment;
+    return data.clicks * 56.88;
   }
 
   // Cálculo específico para YouTube CPV ou CPM: Views × R$ 1,26
-  const tipoDeCompraUpper = data.tipoDeCompra.toUpperCase();
   if (data.veiculo === 'YouTube' && (tipoDeCompraUpper === 'CPV' || tipoDeCompraUpper === 'CPM')) {
-    const realInvestment = data.videoViews * 1.26;
-    return realInvestment;
+    return data.videoViews * 1.26;
   }
 
   // Busca o preço correspondente ao veículo e tipo de compra

@@ -235,7 +235,9 @@ const ImpressionsChart = ({
     return `${value.toFixed(1)}%`;
   };
 
-  const formatTooltip = (value: number, name: string) => {
+  const formatTooltip = (value: number | undefined, name: string | undefined) => {
+    if (value === undefined || name === undefined) return '';
+
     // Extrai o nome da métrica removendo o sufixo "_anterior" se existir
     const metricName = name.replace(' (Período Anterior)', '');
     const metric = metricOptions.find(m => m.label === metricName);

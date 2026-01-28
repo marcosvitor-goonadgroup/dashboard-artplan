@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ProcessedCampaignData } from '../types/campaign';
-import { generateOnDemandAnalysis } from '../services/gemini';
+import { generateOnDemandAnalysis } from '../services/openai';
 import ShinyText from './ShinyText';
 
 interface OnDemandAnalysisProps {

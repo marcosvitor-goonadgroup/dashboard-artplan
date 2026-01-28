@@ -28,6 +28,7 @@ const DashboardContent = () => {
   const [loadingSearchTerms, setLoadingSearchTerms] = useState(false);
   const [selectedVehicle, setSelectedVehicle] = useState<string | null>(null);
   const [selectedPI, setSelectedPI] = useState<string | null>(null);
+  const [selectedClient, setSelectedClient] = useState<string | null>(null);
 
   // Load search terms data
   useEffect(() => {
@@ -155,8 +156,13 @@ const DashboardContent = () => {
       filteredDataCopy = filteredDataCopy.filter(d => d.numeroPi === selectedPI);
     }
 
+    // Filter by selected client
+    if (selectedClient) {
+      filteredDataCopy = filteredDataCopy.filter(d => d.cliente === selectedClient);
+    }
+
     return filteredDataCopy;
-  }, [filteredData, selectedCampaign, periodFilter, selectedVehicle, selectedPI, sevenDaysAgoFromMaxDate]);
+  }, [filteredData, selectedCampaign, periodFilter, selectedVehicle, selectedPI, selectedClient, sevenDaysAgoFromMaxDate]);
 
   // Calcula as métricas do período anterior (para comparação)
   const previousPeriodMetrics = useMemo(() => {
@@ -171,6 +177,10 @@ const DashboardContent = () => {
 
     if (selectedCampaign) {
       previousData = previousData.filter(d => d.campanha === selectedCampaign);
+    }
+
+    if (selectedClient) {
+      previousData = previousData.filter(d => d.cliente === selectedClient);
     }
 
     const totalInvestimento = previousData.reduce((sum, item) => sum + item.cost, 0);
@@ -194,7 +204,7 @@ const DashboardContent = () => {
       vtr: totalImpressoes > 0 ? (totalVideoCompletions / totalImpressoes) * 100 : 0,
       taxaEngajamento: totalImpressoes > 0 ? (totalEngajamento / totalImpressoes) * 100 : 0
     };
-  }, [filteredData, selectedCampaign, periodFilter, maxAvailableDate, sevenDaysAgoFromMaxDate]);
+  }, [filteredData, selectedCampaign, selectedClient, periodFilter, maxAvailableDate, sevenDaysAgoFromMaxDate]);
 
   const displayMetrics = useMemo(() => {
     // Calculate metrics based on displayData (which includes period filter)
@@ -237,8 +247,9 @@ const DashboardContent = () => {
     if (selectedCampaign) count++;
     if (selectedVehicle) count++;
     if (selectedPI) count++;
+    if (selectedClient) count++;
     return count;
-  }, [filters, selectedCampaign, selectedVehicle, selectedPI]);
+  }, [filters, selectedCampaign, selectedVehicle, selectedPI, selectedClient]);
 
   const handleSelectCampaign = (campaignName: string) => {
     setSelectedCampaign(campaignName === selectedCampaign ? null : (campaignName || null));
@@ -249,6 +260,7 @@ const DashboardContent = () => {
     setSelectedCampaign(null);
     setSelectedVehicle(null);
     setSelectedPI(null);
+    setSelectedClient(null);
     setFilters({
       dateRange: { start: null, end: null },
       veiculo: [],
@@ -368,6 +380,8 @@ const DashboardContent = () => {
                   selectedPI={selectedPI}
                   onSelectPI={setSelectedPI}
                   selectedVehicle={selectedVehicle}
+                  selectedClient={selectedClient}
+                  onSelectClient={setSelectedClient}
                 />
               </div>
             </div>

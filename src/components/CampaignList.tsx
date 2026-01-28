@@ -1,6 +1,12 @@
-import { CampaignSummary, ProcessedCampaignData, Filters } from '../types/campaign';
-import { useMemo } from 'react';
+import { CampaignSummary, ProcessedCampaignData, Filters, CampaignMetrics } from '../types/campaign';
+import { useMemo, useState } from 'react';
 import { subDays } from 'date-fns';
+import logoSenai from '../images/Logo-SENAI.png';
+
+// Mapeamento de logos por cliente
+const clientLogos: Record<string, string> = {
+  'SENAI': logoSenai
+};
 
 interface CampaignListProps {
   campaigns: CampaignSummary[];
@@ -12,6 +18,15 @@ interface CampaignListProps {
   selectedPI?: string | null;
   onSelectPI?: (pi: string | null) => void;
   selectedVehicle?: string | null;
+  selectedClient?: string | null;
+  onSelectClient?: (client: string | null) => void;
+}
+
+interface ClientData {
+  nome: string;
+  metrics: CampaignMetrics;
+  campanhas: CampaignSummary[];
+  isActive: boolean;
 }
 
 const formatCurrency = (num: number): string => {
@@ -26,12 +41,50 @@ const formatNumber = (num: number): string => {
   return new Intl.NumberFormat('pt-BR').format(num);
 };
 
-const CampaignList = ({ campaigns, selectedCampaign, onSelectCampaign, data, filters, periodFilter, selectedPI, onSelectPI, selectedVehicle }: CampaignListProps) => {
-  // Calcula os PIs disponíveis para cada campanha baseado nos filtros de data e veículo
-  const campaignPIs = useMemo(() => {
-    if (!data) return new Map<string, string[]>();
+const CampaignList = ({
+  selectedCampaign,
+  onSelectCampaign,
+  data,
+  filters,
+  periodFilter,
+  selectedPI,
+  onSelectPI,
+  selectedVehicle,
+  selectedClient,
+  onSelectClient
+}: CampaignListProps) => {
+  const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set());
+  const [expandedCampaigns, setExpandedCampaigns] = useState<Set<string>>(new Set());
 
-    const pisByCampaign = new Map<string, Set<string>>();
+  // Função para calcular métricas - definida antes dos useMemo que a utilizam
+  const calculateMetrics = (items: ProcessedCampaignData[]): CampaignMetrics => {
+    const totals = items.reduce(
+      (acc, row) => ({
+        investimento: acc.investimento + row.cost,
+        investimentoReal: acc.investimentoReal + (row.realInvestment || 0),
+        impressoes: acc.impressoes + row.impressions,
+        cliques: acc.cliques + row.clicks,
+        views: acc.views + row.videoViews,
+        engajamento: acc.engajamento + row.totalEngagements
+      }),
+      { investimento: 0, investimentoReal: 0, impressoes: 0, cliques: 0, views: 0, engajamento: 0 }
+    );
+
+    return {
+      ...totals,
+      cpm: totals.impressoes > 0 ? (totals.investimento / totals.impressoes) * 1000 : 0,
+      cpc: totals.cliques > 0 ? totals.investimento / totals.cliques : 0,
+      cpv: totals.views > 0 ? totals.investimento / totals.views : 0,
+      cpe: totals.engajamento > 0 ? totals.investimento / totals.engajamento : 0,
+      ctr: totals.impressoes > 0 ? (totals.cliques / totals.impressoes) * 100 : 0,
+      vtr: totals.impressoes > 0 ? (items.reduce((acc, row) => acc + row.videoCompletions, 0) / totals.impressoes) * 100 : 0,
+      taxaEngajamento: totals.impressoes > 0 ? (totals.engajamento / totals.impressoes) * 100 : 0
+    };
+  };
+
+  // Agrupa dados por Cliente -> Campanha -> PI
+  const clientsData = useMemo(() => {
+    if (!data) return [];
 
     let filteredData = [...data];
 
@@ -57,7 +110,97 @@ const CampaignList = ({ campaigns, selectedCampaign, onSelectCampaign, data, fil
       filteredData = filteredData.filter(d => d.veiculo === selectedVehicle);
     }
 
-    // Agrupa PIs por campanha
+    // Agrupa por cliente
+    const clientMap = new Map<string, ProcessedCampaignData[]>();
+    filteredData.forEach(item => {
+      const cliente = item.cliente || 'Sem Cliente';
+      if (!clientMap.has(cliente)) {
+        clientMap.set(cliente, []);
+      }
+      clientMap.get(cliente)!.push(item);
+    });
+
+    // Converte para array de ClientData
+    const clients: ClientData[] = [];
+    clientMap.forEach((clientItems, clienteName) => {
+      // Agrupa campanhas dentro do cliente
+      const campanhaMap = new Map<string, ProcessedCampaignData[]>();
+      clientItems.forEach(item => {
+        if (!campanhaMap.has(item.campanha)) {
+          campanhaMap.set(item.campanha, []);
+        }
+        campanhaMap.get(item.campanha)!.push(item);
+      });
+
+      // Calcula métricas do cliente
+      const clientMetrics = calculateMetrics(clientItems);
+
+      // Verifica se cliente está ativo
+      const sevenDaysAgoFromToday = subDays(new Date(), 7);
+      const isClientActive = clientItems.some(
+        d => d.date > sevenDaysAgoFromToday && (d.impressions > 0 || d.clicks > 0 || d.videoViews > 0) && d.cost > 0
+      );
+
+      // Cria campanhas do cliente
+      const clientCampaigns: CampaignSummary[] = Array.from(campanhaMap.entries())
+        .map(([campanhaNome, campanhaItems]) => {
+          const metrics = calculateMetrics(campanhaItems);
+          const lastActivity = campanhaItems.reduce(
+            (latest, d) => (d.date > latest ? d.date : latest),
+            new Date(0)
+          );
+          const isActive = campanhaItems.some(
+            d => d.date > sevenDaysAgoFromToday && (d.impressions > 0 || d.clicks > 0 || d.videoViews > 0) && d.cost > 0
+          );
+
+          return {
+            nome: campanhaNome,
+            status: isActive ? 'active' : 'inactive' as 'active' | 'inactive',
+            lastActivity,
+            metrics
+          };
+        })
+        .sort((a, b) => b.lastActivity.getTime() - a.lastActivity.getTime());
+
+      clients.push({
+        nome: clienteName,
+        metrics: clientMetrics,
+        campanhas: clientCampaigns,
+        isActive: isClientActive
+      });
+    });
+
+    // Ordena clientes por investimento
+    return clients.sort((a, b) => b.metrics.investimento - a.metrics.investimento);
+  }, [data, filters, periodFilter, selectedVehicle]);
+
+  // Calcula os PIs disponíveis para cada campanha
+  const campaignPIs = useMemo(() => {
+    if (!data) return new Map<string, string[]>();
+
+    const pisByCampaign = new Map<string, Set<string>>();
+
+    let filteredData = [...data];
+
+    const yesterday = subDays(new Date(), 1);
+    filteredData = filteredData.filter(item => item.date <= yesterday);
+
+    if (filters?.dateRange.start) {
+      filteredData = filteredData.filter(d => d.date >= filters.dateRange.start!);
+    }
+    if (filters?.dateRange.end) {
+      filteredData = filteredData.filter(d => d.date <= filters.dateRange.end!);
+    }
+
+    if (periodFilter === '7days') {
+      const sevenDaysAgo = subDays(yesterday, 7);
+      filteredData = filteredData.filter(item => item.date >= sevenDaysAgo);
+    }
+
+    if (selectedVehicle) {
+      filteredData = filteredData.filter(d => d.veiculo === selectedVehicle);
+    }
+
     filteredData.forEach(item => {
       if (item.numeroPi) {
         if (!pisByCampaign.has(item.campanha)) {
@@ -67,7 +210,6 @@ const CampaignList = ({ campaigns, selectedCampaign, onSelectCampaign, data, fil
       }
     });
 
-    // Converte Sets para Arrays ordenados
     const result = new Map<string, string[]>();
     pisByCampaign.forEach((pisSet, campanha) => {
       result.set(campanha, Array.from(pisSet).sort());
@@ -83,14 +225,52 @@ const CampaignList = ({ campaigns, selectedCampaign, onSelectCampaign, data, fil
     }
   };
 
+  const toggleClient = (clientName: string) => {
+    const newExpanded = new Set(expandedClients);
+    if (newExpanded.has(clientName)) {
+      newExpanded.delete(clientName);
+    } else {
+      newExpanded.add(clientName);
+    }
+    setExpandedClients(newExpanded);
+  };
+
+  const toggleCampaign = (campaignName: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const newExpanded = new Set(expandedCampaigns);
+    if (newExpanded.has(campaignName)) {
+      newExpanded.delete(campaignName);
+    } else {
+      newExpanded.add(campaignName);
+    }
+    setExpandedCampaigns(newExpanded);
+  };
+
+  const handleClientSelect = (clientName: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onSelectClient) {
+      onSelectClient(selectedClient === clientName ? null : clientName);
+    }
+  };
+
+  const totalCampaigns = clientsData.reduce((sum, client) => sum + client.campanhas.length, 0);
+
   return (
     <div className="bg-white rounded-lg shadow border border-gray-200 h-full flex flex-col">
       <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
         <h2 className="text-lg font-semibold text-gray-800">
-          Campanhas Ativas ({campaigns.length})
+          Clientes ({clientsData.length}) • Campanhas ({totalCampaigns})
         </h2>
-        {(selectedCampaign || selectedPI) && (
+        {(selectedCampaign || selectedPI || selectedClient) && (
           <div className="flex gap-2">
+            {selectedClient && (
+              <button
+                onClick={() => onSelectClient?.(null)}
+                className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+              >
+                Limpar cliente
+              </button>
+            )}
             {selectedCampaign && (
               <button
                 onClick={() => onSelectCampaign('')}
@@ -111,81 +291,165 @@ const CampaignList = ({ campaigns, selectedCampaign, onSelectCampaign, data, fil
         )}
       </div>
       <div className="flex-1 overflow-y-auto">
-        {campaigns.length === 0 ? (
+        {clientsData.length === 0 ? (
           <div className="p-8 text-center text-gray-500">
-            Nenhuma campanha encontrada
+            Nenhum cliente encontrado
           </div>
         ) : (
           <div className="divide-y divide-gray-200">
-            {campaigns.map((campaign) => (
-              <div
-                key={campaign.nome}
-                onClick={() => onSelectCampaign(campaign.nome)}
-                className={`px-6 py-4 hover:bg-blue-50 transition-colors cursor-pointer ${
-                  selectedCampaign === campaign.nome ? 'bg-blue-50 border-l-4 border-blue-600' : ''
-                }`}
-              >
-                <div className="flex items-start space-x-3">
-                  <div className="flex-shrink-0 mt-1">
-                    <div
-                      className={`h-3 w-3 rounded-full ${
-                        campaign.status === 'active'
-                          ? 'bg-green-500'
-                          : 'bg-gray-400'
-                      }`}
-                      title={
-                        campaign.status === 'active'
-                          ? 'Ativa nos últimos 7 dias'
-                          : 'Inativa'
-                      }
-                    />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">
-                      {campaign.nome}
-                    </p>
-                    <div className="mt-2 grid grid-cols-2 md:grid-cols-3 gap-2 text-xs text-gray-600">
+            {clientsData.map((client) => (
+              <div key={client.nome}>
+                {/* Card do Cliente */}
+                <div
+                  onClick={() => toggleClient(client.nome)}
+                  className={`px-6 py-4 hover:bg-gray-50 transition-colors cursor-pointer ${
+                    selectedClient === client.nome ? 'bg-blue-50 border-l-4 border-blue-600' : ''
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      {/* Logo do cliente ou ícone padrão */}
+                      {clientLogos[client.nome] ? (
+                        <img
+                          src={clientLogos[client.nome]}
+                          alt={client.nome}
+                          className="h-8 w-auto object-contain"
+                        />
+                      ) : (
+                        <div className="h-8 w-8 bg-gray-200 rounded flex items-center justify-center">
+                          <span className="text-xs font-bold text-gray-500">
+                            {client.nome.substring(0, 2).toUpperCase()}
+                          </span>
+                        </div>
+                      )}
                       <div>
-                        <span className="font-medium">Investimento:</span>{' '}
-                        {formatCurrency(
-                          campaign.metrics.investimentoReal && campaign.metrics.investimentoReal > 0
-                            ? campaign.metrics.investimentoReal
-                            : campaign.metrics.investimento
-                        )}
-                      </div>
-                      <div>
-                        <span className="font-medium">Impressões:</span>{' '}
-                        {formatNumber(campaign.metrics.impressoes)}
-                      </div>
-                      <div>
-                        <span className="font-medium">Cliques:</span>{' '}
-                        {formatNumber(campaign.metrics.cliques)}
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-semibold text-gray-900">{client.nome}</p>
+                          <div
+                            className={`h-2 w-2 rounded-full ${
+                              client.isActive ? 'bg-green-500' : 'bg-gray-400'
+                            }`}
+                            title={client.isActive ? 'Ativo nos últimos 7 dias' : 'Inativo'}
+                          />
+                        </div>
+                        <p className="text-xs text-gray-500">
+                          {client.campanhas.length} campanha{client.campanhas.length !== 1 ? 's' : ''}
+                        </p>
                       </div>
                     </div>
-
-                    {/* Botões de PI */}
-                    {campaignPIs.get(campaign.nome) && campaignPIs.get(campaign.nome)!.length > 0 && (
-                      <div className="mt-3">
-                        <p className="text-xs font-medium text-gray-500 mb-1.5">Números PI:</p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {campaignPIs.get(campaign.nome)!.map(pi => (
-                            <button
-                              key={pi}
-                              onClick={(e) => handlePIClick(pi, e)}
-                              className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
-                                selectedPI === pi
-                                  ? 'bg-blue-600 text-white'
-                                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                              }`}
-                            >
-                              {pi}
-                            </button>
-                          ))}
-                        </div>
+                    <div className="flex items-center gap-3">
+                      <div className="text-right">
+                        <p className="text-sm font-medium text-gray-900">
+                          {formatCurrency(
+                            client.metrics.investimentoReal && client.metrics.investimentoReal > 0
+                              ? client.metrics.investimentoReal
+                              : client.metrics.investimento
+                          )}
+                        </p>
+                        <p className="text-xs text-gray-500">{formatNumber(client.metrics.impressoes)} imp.</p>
                       </div>
-                    )}
+                      <button
+                        onClick={(e) => handleClientSelect(client.nome, e)}
+                        className={`px-2 py-1 text-xs rounded ${
+                          selectedClient === client.nome
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
+                      >
+                        Filtrar
+                      </button>
+                      <svg
+                        className={`w-5 h-5 text-gray-400 transition-transform ${
+                          expandedClients.has(client.nome) ? 'rotate-180' : ''
+                        }`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </div>
                   </div>
                 </div>
+
+                {/* Campanhas do Cliente (expandível) */}
+                {expandedClients.has(client.nome) && (
+                  <div className="bg-gray-50 border-t border-gray-100">
+                    {client.campanhas.map((campaign) => (
+                      <div key={campaign.nome} className="border-b border-gray-100 last:border-b-0">
+                        {/* Card da Campanha */}
+                        <div
+                          onClick={(e) => {
+                            onSelectCampaign(campaign.nome === selectedCampaign ? '' : campaign.nome);
+                            toggleCampaign(campaign.nome, e);
+                          }}
+                          className={`px-6 py-3 pl-12 hover:bg-gray-100 transition-colors cursor-pointer ${
+                            selectedCampaign === campaign.nome ? 'bg-blue-50 border-l-4 border-blue-500' : ''
+                          }`}
+                        >
+                          <div className="flex items-start space-x-3">
+                            <div className="flex-shrink-0 mt-1">
+                              <div
+                                className={`h-2.5 w-2.5 rounded-full ${
+                                  campaign.status === 'active' ? 'bg-green-500' : 'bg-gray-400'
+                                }`}
+                                title={campaign.status === 'active' ? 'Ativa nos últimos 7 dias' : 'Inativa'}
+                              />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-gray-800 truncate">
+                                {campaign.nome}
+                              </p>
+                              <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
+                                <span>
+                                  {formatCurrency(
+                                    campaign.metrics.investimentoReal && campaign.metrics.investimentoReal > 0
+                                      ? campaign.metrics.investimentoReal
+                                      : campaign.metrics.investimento
+                                  )}
+                                </span>
+                                <span>{formatNumber(campaign.metrics.impressoes)} imp.</span>
+                                <span>{formatNumber(campaign.metrics.cliques)} cliques</span>
+                              </div>
+                            </div>
+                            <svg
+                              className={`w-4 h-4 text-gray-400 transition-transform flex-shrink-0 ${
+                                expandedCampaigns.has(campaign.nome) ? 'rotate-180' : ''
+                              }`}
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </div>
+                        </div>
+
+                        {/* PIs da Campanha (expandível) */}
+                        {expandedCampaigns.has(campaign.nome) && campaignPIs.get(campaign.nome) && campaignPIs.get(campaign.nome)!.length > 0 && (
+                          <div className="px-6 py-3 pl-16 bg-white border-t border-gray-100">
+                            <p className="text-xs font-medium text-gray-500 mb-2">Números PI:</p>
+                            <div className="flex flex-wrap gap-2">
+                              {campaignPIs.get(campaign.nome)!.map(pi => (
+                                <button
+                                  key={pi}
+                                  onClick={(e) => handlePIClick(pi, e)}
+                                  className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                                    selectedPI === pi
+                                      ? 'bg-blue-600 text-white shadow-sm'
+                                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                  }`}
+                                >
+                                  PI {pi}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
           </div>
