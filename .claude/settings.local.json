@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(npx tsc:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "WebFetch(domain:nmbcoamazonia-api.vercel.app)",
+      "Bash(identify \"c:/Users/marco/OneDrive/Desktop/GOON/AdDesk/ArtPlan/src/images/Logo-SENAI.png\")"
     ]
   }
 }

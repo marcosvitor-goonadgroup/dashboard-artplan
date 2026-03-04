@@ -2,10 +2,12 @@ import { CampaignSummary, ProcessedCampaignData, Filters, CampaignMetrics } from
 import { useMemo, useState } from 'react';
 import { subDays } from 'date-fns';
 import logoSenai from '../images/Logo-SENAI.png';
+import logoSesi from '../images/sesi_logo.jpg';
 
 // Mapeamento de logos por cliente
 const clientLogos: Record<string, string> = {
-  'SENAI': logoSenai
+  'SENAI': logoSenai,
+  'SESI': logoSesi
 };
 
 interface CampaignListProps {
@@ -313,7 +315,7 @@ const CampaignList = ({
                         <img
                           src={clientLogos[client.nome]}
                           alt={client.nome}
-                          className="h-8 w-auto object-contain"
+                          className="h-8 w-28 object-contain object-left"
                         />
                       ) : (
                         <div className="h-8 w-8 bg-gray-200 rounded flex items-center justify-center">

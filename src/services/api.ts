@@ -2,7 +2,10 @@ import axios from 'axios';
 import { ApiResponse, ProcessedCampaignData, ProcessedSearchData, PricingTableRow } from '../types/campaign';
 import { parse } from 'date-fns';
 
-const API_URL = 'https://nmbcoamazonia-api.vercel.app/google/sheets/1CV-RGsN7QWeQjhtQ8NOLAUoPtfpf4J60uOKTdzqNNl8/data?range=Consolidado';
+const CAMPAIGN_API_URLS = [
+  'https://nmbcoamazonia-api.vercel.app/google/sheets/1CV-RGsN7QWeQjhtQ8NOLAUoPtfpf4J60uOKTdzqNNl8/data?range=Consolidado',
+  'https://nmbcoamazonia-api.vercel.app/google/sheets/1XAP9OYa_1eZj7dl-8dE467u3kpkZzx0cywUUvlFDiHU/data?range=Consolidado'
+];
 
 const SEARCH_API_URLS = [
   'https://nmbcoamazonia-api.vercel.app/google/sheets/1abcar-ESRB_f8ytKGQ_ru_slZ67cXhjxKt8gL7TrEVw/data?range=Search',
@@ -60,52 +63,56 @@ const normalizeVeiculo = (veiculo: string): string => {
 
 export const fetchCampaignData = async (): Promise<ProcessedCampaignData[]> => {
   try {
-    const response = await axios.get<ApiResponse>(API_URL);
+    const responses = await Promise.all(
+      CAMPAIGN_API_URLS.map(url => axios.get<ApiResponse>(url))
+    );
 
     const allData: ProcessedCampaignData[] = [];
 
-    if (response.data.success && response.data.data.values.length > 1) {
-      const rows = response.data.data.values.slice(1);
+    responses.forEach(response => {
+      if (response.data.success && response.data.data.values.length > 1) {
+        const rows = response.data.data.values.slice(1);
 
-      rows.forEach(row => {
-        if (row.length >= 20) {
-          const numeroPi = row[19] || '';
-          const veiculoRaw = row[14] || '';
-          const veiculo = normalizeVeiculo(veiculoRaw);
-          const cliente = row[20] || '';
+        rows.forEach(row => {
+          if (row.length >= 20) {
+            const numeroPi = row[19] || '';
+            const veiculoRaw = row[14] || '';
+            const veiculo = normalizeVeiculo(veiculoRaw);
+            const cliente = row[20] || '';
 
-          // Ignora linhas onde o Número PI é "#VALUE!", EXCETO para Google Search
-          if (numeroPi === '#VALUE!' && veiculo !== 'Google Search') {
-            return;
+            // Ignora linhas onde o Número PI é "#VALUE!", EXCETO para Google Search
+            if (numeroPi === '#VALUE!' && veiculo !== 'Google Search') {
+              return;
+            }
+
+            const dataRow: ProcessedCampaignData = {
+              date: parseDate(row[0]),
+              campaignName: row[1] || '',
+              adSetName: row[2] || '',
+              adName: row[3] || '',
+              cost: parseCurrency(row[4]),
+              impressions: parseNumber(row[5]),
+              reach: parseNumber(row[6]),
+              clicks: parseNumber(row[7]),
+              videoViews: parseNumber(row[8]),
+              videoViews25: parseNumber(row[9]),
+              videoViews50: parseNumber(row[10]),
+              videoViews75: parseNumber(row[11]),
+              videoCompletions: parseNumber(row[12]),
+              totalEngagements: parseNumber(row[13]),
+              veiculo: veiculo,
+              tipoDeCompra: row[15] || '',
+              videoEstaticoAudio: row[16] || '',
+              image: row[17] || '',
+              campanha: row[18] || '',
+              numeroPi: numeroPi,
+              cliente: cliente
+            };
+            allData.push(dataRow);
           }
-
-          const dataRow: ProcessedCampaignData = {
-            date: parseDate(row[0]),
-            campaignName: row[1] || '',
-            adSetName: row[2] || '',
-            adName: row[3] || '',
-            cost: parseCurrency(row[4]),
-            impressions: parseNumber(row[5]),
-            reach: parseNumber(row[6]),
-            clicks: parseNumber(row[7]),
-            videoViews: parseNumber(row[8]),
-            videoViews25: parseNumber(row[9]),
-            videoViews50: parseNumber(row[10]),
-            videoViews75: parseNumber(row[11]),
-            videoCompletions: parseNumber(row[12]),
-            totalEngagements: parseNumber(row[13]),
-            veiculo: veiculo,
-            tipoDeCompra: row[15] || '',
-            videoEstaticoAudio: row[16] || '',
-            image: row[17] || '',
-            campanha: row[18] || '',
-            numeroPi: numeroPi,
-            cliente: cliente
-          };
-          allData.push(dataRow);
-        }
-      });
-    }
+        });
+      }
+    });
 
     return allData;
   } catch (error) {

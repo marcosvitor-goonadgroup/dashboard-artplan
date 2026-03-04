@@ -22,6 +22,11 @@ export const calculateRealInvestment = (
       // CPC = R$ 15,00 por clique
       return data.clicks * 1.98;
     }
+    if (tipoDeCompraUpper === 'CPM') {
+      return (data.impressions / 1000) * 28.0;
+    }
+    // Tipo de compra não mapeado: usa custo real da planilha
+    return data.cost;
   }
 
   // Cálculo específico para Google Search: Clicks × R$ 56,88
@@ -40,9 +45,6 @@ export const calculateRealInvestment = (
   );
 
   if (!pricing) {
-    // Se não encontrar preço na tabela, retorna o custo original
-    console.warn(`Preço não encontrado para veículo "${data.veiculo}" e tipo de compra "${data.tipoDeCompra}"`);
-
     return data.cost;
   }
 
