@@ -61,8 +61,8 @@ export const CampaignProvider = ({ children }: CampaignProviderProps) => {
         ]);
 
 
-        // Usa todos os dados sem filtrar campanhas específicas
-        const filteredCampaignData = campaignData;
+        // Remove linhas sem campanha definida
+        const filteredCampaignData = campaignData.filter(item => item.campanha && item.campanha.trim() !== '');
 
         // Normaliza números de PI removendo zeros à esquerda
         const normalizedData = filteredCampaignData.map(item => {
