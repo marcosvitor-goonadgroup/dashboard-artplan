@@ -247,61 +247,60 @@ const formatNumber = (num: number): string => {
 };
 
 /**
- * Chama a API da OpenAI
+ * Chama a API da OpenAI via servidor (evita CORS e protege a chave)
  */
 const callOpenAIAPI = async (prompt: string): Promise<string> => {
+  // Em produção usa o endpoint serverless; em dev local chama diretamente
+  const isProduction = import.meta.env.PROD;
+
+  if (isProduction) {
+    try {
+      console.log(`🔄 Gerando análise via /api/generate...`);
+      const response = await axios.post('/api/generate', { prompt, model: MODEL }, { timeout: 90000 });
+      console.log(`✅ Análise gerada com sucesso usando ${response.data.model}`);
+      return response.data.analysis;
+    } catch (error: any) {
+      const statusCode = error.response?.status;
+      const errorMessage = error.response?.data?.error || error.response?.data?.message || error.message;
+      console.error(`❌ Erro em /api/generate: ${statusCode || 'rede'} - ${errorMessage}`);
+      if (statusCode === 401) throw new Error('Chave de API inválida no servidor.');
+      throw new Error(errorMessage || 'Erro ao gerar análise');
+    }
+  }
+
+  // Desenvolvimento local: chama OpenAI diretamente
   try {
     console.log(`🔄 Gerando análise com modelo: ${MODEL}...`);
-
     const response = await axios.post(
       'https://api.openai.com/v1/chat/completions',
       {
         model: MODEL,
         messages: [
-          {
-            role: 'system',
-            content: 'Você é um analista especializado em performance de mídia digital. Seja objetivo, factual e cite números específicos.'
-          },
-          {
-            role: 'user',
-            content: prompt
-          }
+          { role: 'system', content: 'Você é um analista especializado em performance de mídia digital. Seja objetivo, factual e cite números específicos.' },
+          { role: 'user', content: prompt }
         ],
         temperature: 0.7,
         max_tokens: 1500
       },
       {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${API_KEY}`
-        },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${API_KEY}` },
         timeout: 60000
       }
     );
 
-    if (response.data.choices && response.data.choices.length > 0) {
+    if (response.data.choices?.length > 0) {
       console.log(`✅ Análise gerada com sucesso usando ${MODEL}`);
       return response.data.choices[0].message.content;
     }
-
     throw new Error('API não retornou conteúdo válido');
 
   } catch (error: any) {
     const statusCode = error.response?.status;
     const errorMessage = error.response?.data?.error?.message || error.message;
-
     console.error(`❌ Erro na API OpenAI: ${statusCode || 'Erro de rede'} - ${errorMessage}`);
-
-    if (statusCode === 401) {
-      throw new Error('Chave de API inválida. Verifique a variável VITE_OPENAI_API_KEY no arquivo .env');
-    }
-    if (statusCode === 429) {
-      throw new Error('Limite de requisições atingido. Aguarde alguns minutos e tente novamente.');
-    }
-    if (statusCode === 500 || statusCode === 503) {
-      throw new Error('Serviço da OpenAI temporariamente indisponível. Tente novamente em alguns minutos.');
-    }
-
+    if (statusCode === 401) throw new Error('Chave de API inválida. Verifique VITE_OPENAI_API_KEY no .env');
+    if (statusCode === 429) throw new Error('Limite de requisições atingido. Aguarde alguns minutos.');
+    if (statusCode === 500 || statusCode === 503) throw new Error('Serviço da OpenAI temporariamente indisponível.');
     throw new Error(errorMessage || 'Erro ao gerar análise');
   }
 };
