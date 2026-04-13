@@ -360,6 +360,7 @@ const DashboardContent = () => {
                   selectedVehicle={selectedVehicle}
                   selectedClient={selectedClient}
                   onSelectClient={setSelectedClient}
+                  maxAvailableDate={maxAvailableDate}
                 />
               </div>
             </div>

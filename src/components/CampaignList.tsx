@@ -22,6 +22,7 @@ interface CampaignListProps {
   selectedVehicle?: string | null;
   selectedClient?: string | null;
   onSelectClient?: (client: string | null) => void;
+  maxAvailableDate?: Date;
 }
 
 interface ClientData {
@@ -53,7 +54,8 @@ const CampaignList = ({
   onSelectPI,
   selectedVehicle,
   selectedClient,
-  onSelectClient
+  onSelectClient,
+  maxAvailableDate
 }: CampaignListProps) => {
   const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set());
   const [expandedCampaigns, setExpandedCampaigns] = useState<Set<string>>(new Set());
@@ -90,6 +92,12 @@ const CampaignList = ({
 
     let filteredData = [...data];
 
+    // Determina o último dia com dados (usa prop quando disponível)
+    const latestDataDate = maxAvailableDate ?? data.reduce(
+      (latest, d) => (d.date > latest ? d.date : latest),
+      new Date(0)
+    );
+
     // Aplica filtros de data
     const yesterday = subDays(new Date(), 1);
     filteredData = filteredData.filter(item => item.date <= yesterday);
@@ -101,9 +109,9 @@ const CampaignList = ({
       filteredData = filteredData.filter(d => d.date <= filters.dateRange.end!);
     }
 
-    // Aplica filtro de período
+    // Aplica filtro de período (usa último dia com dados como base)
     if (periodFilter === '7days') {
-      const sevenDaysAgo = subDays(yesterday, 7);
+      const sevenDaysAgo = subDays(latestDataDate, 7);
       filteredData = filteredData.filter(item => item.date >= sevenDaysAgo);
     }
 
@@ -137,10 +145,10 @@ const CampaignList = ({
       // Calcula métricas do cliente
       const clientMetrics = calculateMetrics(clientItems);
 
-      // Verifica se cliente está ativo
-      const sevenDaysAgoFromToday = subDays(new Date(), 7);
+      // Verifica se cliente está ativo (últimos 7 dias a partir do último dado)
+      const sevenDaysAgoFromLatest = subDays(latestDataDate, 7);
       const isClientActive = clientItems.some(
-        d => d.date > sevenDaysAgoFromToday && (d.impressions > 0 || d.clicks > 0 || d.videoViews > 0) && d.cost > 0
+        d => d.date > sevenDaysAgoFromLatest && (d.impressions > 0 || d.clicks > 0 || d.videoViews > 0) && d.cost > 0
       );
 
       // Cria campanhas do cliente
@@ -152,7 +160,7 @@ const CampaignList = ({
             new Date(0)
           );
           const isActive = campanhaItems.some(
-            d => d.date > sevenDaysAgoFromToday && (d.impressions > 0 || d.clicks > 0 || d.videoViews > 0) && d.cost > 0
+            d => d.date > sevenDaysAgoFromLatest && (d.impressions > 0 || d.clicks > 0 || d.videoViews > 0) && d.cost > 0
           );
 
           return {
@@ -174,7 +182,7 @@ const CampaignList = ({
 
     // Ordena clientes por investimento
     return clients.sort((a, b) => b.metrics.investimento - a.metrics.investimento);
-  }, [data, filters, periodFilter, selectedVehicle]);
+  }, [data, filters, periodFilter, selectedVehicle, maxAvailableDate]);
 
   // Calcula os PIs disponíveis para cada campanha
   const campaignPIs = useMemo(() => {
@@ -184,8 +192,12 @@ const CampaignList = ({
 
     let filteredData = [...data];
 
-    const yesterday = subDays(new Date(), 1);
-    filteredData = filteredData.filter(item => item.date <= yesterday);
+    const latestDate = maxAvailableDate ?? data.reduce(
+      (latest, d) => (d.date > latest ? d.date : latest),
+      new Date(0)
+    );
+
+    filteredData = filteredData.filter(item => item.date <= latestDate);
 
     if (filters?.dateRange.start) {
       filteredData = filteredData.filter(d => d.date >= filters.dateRange.start!);
@@ -195,7 +207,7 @@ const CampaignList = ({
     }
 
     if (periodFilter === '7days') {
-      const sevenDaysAgo = subDays(yesterday, 7);
+      const sevenDaysAgo = subDays(latestDate, 7);
       filteredData = filteredData.filter(item => item.date >= sevenDaysAgo);
     }
 

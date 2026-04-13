@@ -270,9 +270,16 @@ const ImpressionsChart = ({
     <div className="bg-white rounded-lg shadow border border-gray-200 p-6 h-full flex flex-col">
       <div className="mb-4">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold text-gray-800">
-            {chartTitle}
-          </h2>
+          <div className="flex items-center gap-3">
+            <h2 className="text-lg font-semibold text-gray-800">
+              {chartTitle}
+            </h2>
+            {periodFilter === '7days' && propMaxAvailableDate && (
+              <span className="text-xs text-gray-400 font-normal">
+                último dado: {format(propMaxAvailableDate, 'dd/MM/yyyy')}
+              </span>
+            )}
+          </div>
 
           {/* Botão dropdown para seleção de métricas */}
           <div className="relative">
