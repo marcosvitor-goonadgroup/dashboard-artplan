@@ -1,5 +1,8 @@
 import { useState, useMemo, useEffect } from 'react';
 import { CampaignProvider, useCampaign } from './contexts/CampaignContext';
+import ClientDashboard from './pages/ClientDashboard';
+import CampaignDashboard from './pages/CampaignDashboard';
+import PIDashboard from './pages/PIDashboard';
 import Header from './components/Header';
 import BigNumbers from './components/BigNumbers';
 import CampaignList from './components/CampaignList';
@@ -341,7 +344,10 @@ const DashboardContent = () => {
           {/* Card de Informações do PI */}
           {selectedPI && (
             <div>
-              <PIInfoCard numeroPi={selectedPI} />
+              <PIInfoCard
+                numeroPi={selectedPI}
+                campaignData={filteredData.filter(d => d.numeroPi === selectedPI)}
+              />
             </div>
           )}
 
@@ -432,6 +438,24 @@ const DashboardContent = () => {
 };
 
 function App() {
+  const pathname = window.location.pathname;
+  const parts = pathname.replace(/^\//, '').split('/').filter(Boolean).map(decodeURIComponent);
+  const clientSlug = parts[0] || '';
+  const campaignSlug = parts[1] || '';
+  const piSlug = parts[2] || '';
+
+  if (clientSlug && campaignSlug && piSlug) {
+    return <PIDashboard clientSlug={clientSlug} campaignSlug={campaignSlug} piSlug={piSlug} />;
+  }
+
+  if (clientSlug && campaignSlug) {
+    return <CampaignDashboard clientSlug={clientSlug} campaignSlug={campaignSlug} />;
+  }
+
+  if (clientSlug) {
+    return <ClientDashboard slug={clientSlug} />;
+  }
+
   return (
     <CampaignProvider>
       <DashboardContent />

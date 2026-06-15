@@ -1,7 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { ProcessedCampaignData, Filters, CampaignSummary, CampaignMetrics } from '../types/campaign';
-import { fetchCampaignData, fetchPricingTable } from '../services/api';
-import { calculateRealInvestment } from '../utils/investmentCalculator';
+import { fetchCampaignData } from '../services/api';
 import { subDays, isAfter } from 'date-fns';
 
 interface CampaignContextType {
@@ -54,12 +53,7 @@ export const CampaignProvider = ({ children }: CampaignProviderProps) => {
       try {
         setLoading(true);
 
-        // Carrega dados de campanha e tabela de preços em paralelo
-        const [campaignData, pricingData] = await Promise.all([
-          fetchCampaignData(),
-          fetchPricingTable()
-        ]);
-
+        const campaignData = await fetchCampaignData();
 
         // Remove linhas sem campanha definida
         const filteredCampaignData = campaignData.filter(item => item.campanha && item.campanha.trim() !== '');
@@ -76,14 +70,8 @@ export const CampaignProvider = ({ children }: CampaignProviderProps) => {
           };
         });
 
-        // Calcula investimento real para cada item
-        const dataWithRealInvestment = normalizedData.map(item => ({
-          ...item,
-          realInvestment: calculateRealInvestment(item, pricingData)
-        }));
-
-        setData(dataWithRealInvestment);
-        setFilteredData(dataWithRealInvestment);
+        setData(normalizedData);
+        setFilteredData(normalizedData);
         setError(null);
       } catch (err) {
         setError('Erro ao carregar dados das campanhas');
@@ -125,7 +113,7 @@ export const CampaignProvider = ({ children }: CampaignProviderProps) => {
     const totals = dataSet.reduce(
       (acc, row) => ({
         investimento: acc.investimento + row.cost,
-        investimentoReal: acc.investimentoReal + (row.realInvestment || 0),
+        investimentoReal: acc.investimentoReal + row.cost,
         impressoes: acc.impressoes + row.impressions,
         cliques: acc.cliques + row.clicks,
         views: acc.views + row.videoViews,

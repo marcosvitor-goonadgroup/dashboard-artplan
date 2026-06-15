@@ -1,14 +1,8 @@
 import { CampaignSummary, ProcessedCampaignData, Filters, CampaignMetrics } from '../types/campaign';
 import { useMemo, useState } from 'react';
 import { subDays } from 'date-fns';
-import logoSenai from '../images/Logo-SENAI.png';
-import logoSesi from '../images/sesi_logo.jpg';
-
-// Mapeamento de logos por cliente
-const clientLogos: Record<string, string> = {
-  'SENAI': logoSenai,
-  'SESI': logoSesi
-};
+import { toSlug } from '../utils/slug';
+import { getClientLogo } from '../config/clientLogos';
 
 interface CampaignListProps {
   campaigns: CampaignSummary[];
@@ -323,9 +317,9 @@ const CampaignList = ({
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-3">
                       {/* Logo do cliente ou ícone padrão */}
-                      {clientLogos[client.nome] ? (
+                      {getClientLogo(client.nome) ? (
                         <img
-                          src={clientLogos[client.nome]}
+                          src={getClientLogo(client.nome)}
                           alt={client.nome}
                           className="h-8 w-28 object-contain object-left"
                         />
@@ -372,6 +366,19 @@ const CampaignList = ({
                       >
                         Filtrar
                       </button>
+                      <a
+                        href={`/${toSlug(client.nome)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        title={`Ver dashboard de ${client.nome}`}
+                        className="flex items-center justify-center w-7 h-7 rounded bg-gray-100 hover:bg-blue-600 text-gray-500 hover:text-white transition-colors shrink-0"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                      </a>
                       <svg
                         className={`w-5 h-5 text-gray-400 transition-transform ${
                           expandedClients.has(client.nome) ? 'rotate-180' : ''

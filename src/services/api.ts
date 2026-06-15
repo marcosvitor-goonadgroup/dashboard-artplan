@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { ApiResponse, ProcessedCampaignData, ProcessedSearchData, PricingTableRow } from '../types/campaign';
+import { ApiResponse, ProcessedCampaignData, ProcessedSearchData } from '../types/campaign';
 import { parse } from 'date-fns';
 
 const API_BASE = import.meta.env.DEV ? '/api-proxy' : 'https://nmbcoamazonia-api.vercel.app';
@@ -14,8 +14,6 @@ const SEARCH_API_URLS = [
   `${API_BASE}/google/sheets/1HykUxjCGGdveDS_5vlLOOkAq7Wkl058453xkYGTAzNM/data?range=Search`
 ];
 
-const PRICING_API_URL = `${API_BASE}/google/sheets/1zgRBEs_qi_9DdYLqw-cEedD1u66FS88ku6zTZ0gV-oU/data?range=base`;
-
 const PI_INFO_API_URL = `${API_BASE}/google/sheets/1T35Pzw9ZA5NOTLHsTqMGZL5IEedpSGdZHJ2ElrqLs1M/data`;
 
 const parseNumber = (value: string): number => {
@@ -28,13 +26,6 @@ const parseCurrency = (value: string): number => {
   if (!value || value === '') return 0;
   // Remove "R$" e espaços, depois processa como número
   const cleaned = value.replace('R$', '').trim().replace(/\./g, '').replace(',', '.');
-  return parseFloat(cleaned) || 0;
-};
-
-const parsePercentage = (value: string): number => {
-  if (!value || value === '') return 0;
-  // Remove "%" e converte para decimal
-  const cleaned = value.replace('%', '').trim().replace(',', '.');
   return parseFloat(cleaned) || 0;
 };
 
@@ -162,33 +153,6 @@ export const fetchSearchTermsData = async (): Promise<ProcessedSearchData[]> => 
     return allData;
   } catch (error) {
     console.error('Erro ao buscar dados de termos de busca:', error);
-    throw error;
-  }
-};
-
-export const fetchPricingTable = async (): Promise<PricingTableRow[]> => {
-  try {
-    const response = await axios.get<ApiResponse>(PRICING_API_URL);
-
-    if (response.data.success && response.data.data.values.length > 1) {
-      const rows = response.data.data.values.slice(1); // Pula o header
-
-      const pricingData: PricingTableRow[] = rows.map(row => ({
-        veiculo: row[0] || '',
-        canal: row[1] || '',
-        formato: row[2] || '',
-        tipoDeCompra: row[3] || '',
-        valorUnitario: parseCurrency(row[4]),
-        desconto: parsePercentage(row[5]),
-        valorFinal: parseCurrency(row[6])
-      }));
-
-      return pricingData;
-    }
-
-    return [];
-  } catch (error) {
-    console.error('Erro ao buscar tabela de preços:', error);
     throw error;
   }
 };
