@@ -19,7 +19,15 @@ const PIInfoCard = ({ numeroPi, campaignData = [], defaultExpanded = false }: PI
   const [loading, setLoading] = useState(false);
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
 
-  const normalizeVehicleName = (name: string): string => name.toLowerCase().trim();
+  // Agrupa veículos em "famílias" para casar o previsto (tabela de PI) com o
+  // realizado (Consolidado): "Fb Ig" ↔ Facebook + Instagram; "Google Ads" ↔
+  // Google Ads + Google Search. Veículos sem família usam o próprio nome.
+  const veiculoGroup = (name: string): string => {
+    const n = name.toLowerCase().trim();
+    if (/face|insta|\bfb\b|\big\b|meta/.test(n)) return 'meta';
+    if (/google|youtube|search/.test(n)) return 'google';
+    return n;
+  };
 
   // Pacing temporal: % dos dias decorridos no período do PI
   const pacingExpected = useMemo(() => {
@@ -48,45 +56,39 @@ const PIInfoCard = ({ numeroPi, campaignData = [], defaultExpanded = false }: PI
     );
   }, [campaignData]);
 
-  // Detalhamento por veículo+tipo do PI, cruzado com os dados realizados
+  // Detalhamento por família de veículo + tipo do PI, cruzado com os dados realizados.
+  // Ambos os lados são agrupados por (grupoVeiculo|tipoDeCompra) para que famílias
+  // como Facebook+Instagram ("Fb Ig") e Google Ads+Google Search ("Google Ads")
+  // somem todo o investimento/volume realizado correspondente.
   const veiculacaoPorVeiculoTipo = useMemo(() => {
     if (!piInfo || piInfo.length === 0) return [];
 
     const piGrouped = new Map<string, {
-      veiculo: string;
+      veiculos: Set<string>;
       tipoDeCompra: string;
       previsto: number;
       quantidade: number;
     }>();
 
     piInfo.forEach(info => {
-      const key = `${normalizeVehicleName(info.veiculo)}|${info.modeloCompra.toUpperCase()}`;
+      const key = `${veiculoGroup(info.veiculo)}|${info.modeloCompra.toUpperCase()}`;
       const valor = parseFloat(info.totalBruto.replace('R$', '').replace(/\./g, '').replace(',', '.').trim()) || 0;
       const qtd = parseFloat(info.quantidade.replace(/\./g, '').replace(',', '.').trim()) || 0;
-      if (piGrouped.has(key)) {
-        const e = piGrouped.get(key)!;
-        e.previsto += valor;
-        e.quantidade += qtd;
-      } else {
-        piGrouped.set(key, { veiculo: info.veiculo, tipoDeCompra: info.modeloCompra, previsto: valor, quantidade: qtd });
-      }
+      const e = piGrouped.get(key) ?? { veiculos: new Set<string>(), tipoDeCompra: info.modeloCompra, previsto: 0, quantidade: 0 };
+      e.veiculos.add(info.veiculo);
+      e.previsto += valor;
+      e.quantidade += qtd;
+      piGrouped.set(key, e);
     });
 
     const realizadoGrouped = new Map<string, { realizado: number; cliques: number; impressoes: number }>();
     campaignData.forEach(item => {
-      const key = `${normalizeVehicleName(item.veiculo)}|${item.tipoDeCompra.toUpperCase()}`;
-      if (realizadoGrouped.has(key)) {
-        const e = realizadoGrouped.get(key)!;
-        e.realizado += item.realInvestment || item.cost;
-        e.cliques += item.clicks;
-        e.impressoes += item.impressions;
-      } else {
-        realizadoGrouped.set(key, {
-          realizado: item.realInvestment || item.cost,
-          cliques: item.clicks,
-          impressoes: item.impressions,
-        });
-      }
+      const key = `${veiculoGroup(item.veiculo)}|${item.tipoDeCompra.toUpperCase()}`;
+      const e = realizadoGrouped.get(key) ?? { realizado: 0, cliques: 0, impressoes: 0 };
+      e.realizado += item.realInvestment || item.cost;
+      e.cliques += item.clicks;
+      e.impressoes += item.impressions;
+      realizadoGrouped.set(key, e);
     });
 
     const resultado: Array<{
@@ -97,38 +99,24 @@ const PIInfoCard = ({ numeroPi, campaignData = [], defaultExpanded = false }: PI
       quantidade: number;
       impressoesRealizadas: number;
       cliquesRealizados: number;
-      matchedByVehicle: boolean;
     }> = [];
 
-    piGrouped.forEach((piData) => {
-      const tipoKey = piData.tipoDeCompra.toUpperCase();
-      const veiculoKey = normalizeVehicleName(piData.veiculo);
+    piGrouped.forEach((piData, key) => {
+      let match = realizadoGrouped.get(key);
 
-      let match = realizadoGrouped.get(`${veiculoKey}|${tipoKey}`);
-      const matchedByVehicle = !!match;
-
-      if (!match) {
-        for (const [k, v] of realizadoGrouped.entries()) {
-          if (k.endsWith(`|${tipoKey}`)) {
-            match = v;
-            break;
-          }
-        }
-      }
-
+      // Se o PI tem uma única linha, todo o realizado pertence a ela
       if (!match && piGrouped.size === 1) {
         match = { realizado: totaisRealizados.realizado, cliques: totaisRealizados.cliques, impressoes: totaisRealizados.impressoes };
       }
 
       resultado.push({
-        veiculo: piData.veiculo,
+        veiculo: Array.from(piData.veiculos).join(' / '),
         tipoDeCompra: piData.tipoDeCompra,
         previsto: piData.previsto,
         realizado: match?.realizado ?? 0,
         quantidade: piData.quantidade,
         impressoesRealizadas: match?.impressoes ?? 0,
         cliquesRealizados: match?.cliques ?? 0,
-        matchedByVehicle,
       });
     });
 
