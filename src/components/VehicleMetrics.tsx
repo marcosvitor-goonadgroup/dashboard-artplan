@@ -1,6 +1,7 @@
 import { useMemo, JSX } from 'react';
 import { ProcessedCampaignData, Filters } from '../types/campaign';
 import BenchmarkIndicator from './BenchmarkIndicator';
+import { getVehicleLogo } from '../config/vehicleLogos';
 
 interface VehicleMetricsProps {
   data: ProcessedCampaignData[];
@@ -36,6 +37,12 @@ const formatNumber = (num: number): string => {
 
 // Social Media Icons
 const SocialIcon = ({ name }: { name: string }) => {
+  // Veículos com logo própria usam a imagem da marca (ver vehicleLogos)
+  const logo = getVehicleLogo(name);
+  if (logo) {
+    return <img src={logo} alt={name} className="h-8 w-auto max-w-[110px] object-contain" />;
+  }
+
   const icons: { [key: string]: JSX.Element } = {
     Facebook: (
       <svg className="w-8 h-8" viewBox="0 0 24 24" fill="currentColor">
@@ -296,9 +303,12 @@ const VehicleMetrics = ({ data, periodFilter, filters, vehicleBenchmarks, select
                   <td className="py-3 px-4 border-r border-gray-200">
                     <div className="flex items-center justify-center gap-3">
                       <SocialIcon name={vehicle.veiculo} />
-                      <span className="font-medium text-gray-900">
-                        {vehicle.veiculo}
-                      </span>
+                      {/* A logo já é o nome escrito da marca, então não repete o texto */}
+                      {!getVehicleLogo(vehicle.veiculo) && (
+                        <span className="font-medium text-gray-900">
+                          {vehicle.veiculo}
+                        </span>
+                      )}
                     </div>
                   </td>
                   <td className="py-3 px-4 text-center text-gray-700 font-medium border-r border-gray-200">

@@ -11,7 +11,10 @@
       "Bash(curl -s \"https://nmbcoamazonia-api.vercel.app/google/sheets/1s5kDdMh0g1NP_FDkxDp5obPu6i7csuMtTYLlM5nnE78/data?range=Consolidado\" -o \"C:/Users/marco/AppData/Local/Temp/claude/c--Users-marco-OneDrive-Desktop-GOON-AdDesk-ArtPlan/fa788132-781c-46f3-afb2-66c20664c48e/scratchpad/mundial.json\")",
       "Bash(node -e ' *)",
       "Bash(node \"C:/Users/marco/AppData/Local/Temp/claude/c--Users-marco-OneDrive-Desktop-GOON-AdDesk-ArtPlan/fa788132-781c-46f3-afb2-66c20664c48e/scratchpad/verify.js\")",
-      "Bash(npx vite *)"
+      "Bash(npx vite *)",
+      "Bash(curl -s \"https://nmbcoamazonia-api.vercel.app/google/sheets/1T35Pzw9ZA5NOTLHsTqMGZL5IEedpSGdZHJ2ElrqLs1M/data?range=representacao\" -o \"C:/Users/marco/AppData/Local/Temp/claude/c--Users-marco-OneDrive-Desktop-GOON-AdDesk-ArtPlan/fa788132-781c-46f3-afb2-66c20664c48e/scratchpad/rep.json\")",
+      "Bash(curl -s \"https://nmbcoamazonia-api.vercel.app/google/sheets/1T35Pzw9ZA5NOTLHsTqMGZL5IEedpSGdZHJ2ElrqLs1M/data\" -o \"C:/Users/marco/AppData/Local/Temp/claude/c--Users-marco-OneDrive-Desktop-GOON-AdDesk-ArtPlan/fa788132-781c-46f3-afb2-66c20664c48e/scratchpad/pi_default.json\")",
+      "Bash(node \"C:/Users/marco/AppData/Local/Temp/claude/c--Users-marco-OneDrive-Desktop-GOON-AdDesk-ArtPlan/fa788132-781c-46f3-afb2-66c20664c48e/scratchpad/verify_pi.js\")"
     ]
   }
 }

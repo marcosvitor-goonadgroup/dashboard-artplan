@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { ApiResponse, ProcessedCampaignData, ProcessedSearchData } from '../types/campaign';
+import { ApiResponse, PIInfo, ProcessedCampaignData, ProcessedSearchData } from '../types/campaign';
 import { parse } from 'date-fns';
 
 const API_BASE = import.meta.env.DEV ? '/api-proxy' : 'https://nmbcoamazonia-api.vercel.app';
@@ -16,7 +16,10 @@ const SEARCH_API_URLS = [
   `${API_BASE}/google/sheets/1HykUxjCGGdveDS_5vlLOOkAq7Wkl058453xkYGTAzNM/data?range=Search`
 ];
 
-const PI_INFO_API_URL = `${API_BASE}/google/sheets/1T35Pzw9ZA5NOTLHsTqMGZL5IEedpSGdZHJ2ElrqLs1M/data`;
+const PI_INFO_API_URLS = [
+  `${API_BASE}/google/sheets/1T35Pzw9ZA5NOTLHsTqMGZL5IEedpSGdZHJ2ElrqLs1M/data`,
+  `${API_BASE}/google/sheets/1T35Pzw9ZA5NOTLHsTqMGZL5IEedpSGdZHJ2ElrqLs1M/data?range=representacao`
+];
 
 const parseNumber = (value: string): number => {
   if (!value || value === '') return 0;
@@ -212,59 +215,71 @@ export const convertSearchDataToCampaignData = (searchData: ProcessedSearchData[
   }));
 };
 
+// Compara PIs vindos de planilhas com formatações diferentes, ignorando zeros
+// à esquerda e separador de milhar ("447555", "0447555", "261.633").
+const normalizePiNumber = (numeroPi: string): string =>
+  (numeroPi || '').replace(/\./g, '').replace(/^0+/, '');
+
 /**
- * Busca informações de um PI específico
+ * Busca informações de um PI específico em todas as fontes de PI.
+ * Cada aba tem seu próprio conjunto de colunas, então os campos são resolvidos
+ * pelo cabeçalho, aceitando os nomes equivalentes usados em cada uma.
  */
-export const fetchPIInfo = async (numeroPi: string) => {
+export const fetchPIInfo = async (numeroPi: string): Promise<PIInfo[] | null> => {
   try {
-    const response = await axios.get(PI_INFO_API_URL);
+    const responses = await Promise.allSettled(
+      PI_INFO_API_URLS.map(url => axios.get<ApiResponse>(url))
+    );
 
-    if (!response.data.success || !response.data.data.values) {
-      throw new Error('Formato de resposta inválido');
-    }
+    const normalizedPi = normalizePiNumber(numeroPi);
+    const piInfo: PIInfo[] = [];
 
-    const values = response.data.data.values;
+    responses.forEach((result, index) => {
+      // Uma fonte indisponível não pode derrubar as demais
+      if (result.status === 'rejected') {
+        console.error(`Erro ao buscar a fonte de PI ${PI_INFO_API_URLS[index]}:`, result.reason);
+        return;
+      }
 
-    // Remove zeros à esquerda para comparação
-    const normalizedPi = numeroPi.replace(/^0+/, '');
+      const response = result.value;
+      if (!response.data.success || !response.data.data.values?.length) return;
 
-    // Encontra todas as linhas com o número PI especificado
-    // Compara removendo zeros à esquerda de ambos os lados
-    const piRows = values.slice(1).filter((row: string[]) => {
-      const rowPi = (row[2] || '').replace(/^0+/, '');
-      return rowPi === normalizedPi;
+      const [headerRow, ...rows] = response.data.data.values;
+      const columns = buildColumnIndex(headerRow);
+
+      const cell = (row: string[], ...headers: string[]): string => {
+        for (const header of headers) {
+          const columnIndex = columns[header];
+          if (columnIndex !== undefined) return row[columnIndex] || '';
+        }
+        return '';
+      };
+
+      rows
+        .filter(row => normalizePiNumber(cell(row, 'numero pi')) === normalizedPi)
+        .forEach(row => {
+          piInfo.push({
+            numeroPi: cell(row, 'numero pi'),
+            veiculo: cell(row, 'veiculo'),
+            canal: cell(row, 'canal'),
+            formato: cell(row, 'formato'),
+            modeloCompra: cell(row, 'modelo compra', 'modelos'),
+            valorNegociado: cell(row, 'valor negociado', 'valor unitario desc.'),
+            quantidade: cell(row, 'qtd', 'volume'),
+            totalBruto: cell(row, 'tt bruto', 'bruto negociado'),
+            status: cell(row, 'status'),
+            segmentacao: cell(row, 'segmentacao'),
+            alcance: cell(row, 'alcance'),
+            inicio: cell(row, 'inicio'),
+            fim: cell(row, 'fim'),
+            publico: cell(row, 'publico'),
+            praca: cell(row, 'praca'),
+            objetivo: cell(row, 'objetivo')
+          });
+        });
     });
 
-    if (piRows.length === 0) {
-      return null;
-    }
-
-    // Agrupa informações por veículo
-    // Colunas: [0] Agência, [1] Cliente, [2] Número PI, [3] Veículo, [4] Canal,
-    //          [5] Formato, [6] Modelo Compra, [7] Valor Uni, [8] Desconto,
-    //          [9] Valor Negociado, [10] Qtd, [11] TT Bruto, [12] Reaplicação,
-    //          [13] Status, [14] Segmentação, [15] Alcance, [16] Inicio, [17] Fim,
-    //          [18] Público, [19] Praça, [20] Objetivo
-    const piInfo = piRows.map((row: string[]) => ({
-      numeroPi: row[2] || '',
-      veiculo: row[3] || '',
-      canal: row[4] || '',
-      formato: row[5] || '',
-      modeloCompra: row[6] || '',
-      valorNegociado: row[9] || '',
-      quantidade: row[10] || '',
-      totalBruto: row[11] || '',
-      status: row[13] || '',
-      segmentacao: row[14] || '',
-      alcance: row[15] || '',
-      inicio: row[16] || '',
-      fim: row[17] || '',
-      publico: row[18] || '',
-      praca: row[19] || '',
-      objetivo: row[20] || ''
-    }));
-
-    return piInfo;
+    return piInfo.length > 0 ? piInfo : null;
   } catch (error) {
     console.error('Erro ao buscar informações do PI:', error);
     return null;
