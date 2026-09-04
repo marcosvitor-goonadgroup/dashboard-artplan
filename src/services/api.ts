@@ -6,7 +6,9 @@ const API_BASE = import.meta.env.DEV ? '/api-proxy' : 'https://nmbcoamazonia-api
 
 const CAMPAIGN_API_URLS = [
   `${API_BASE}/google/sheets/1CV-RGsN7QWeQjhtQ8NOLAUoPtfpf4J60uOKTdzqNNl8/data?range=Consolidado`,
-  `${API_BASE}/google/sheets/1XAP9OYa_1eZj7dl-8dE467u3kpkZzx0cywUUvlFDiHU/data?range=Consolidado`
+  `${API_BASE}/google/sheets/1XAP9OYa_1eZj7dl-8dE467u3kpkZzx0cywUUvlFDiHU/data?range=Consolidado`,
+  // SUPERMERCADOS MUNDIAL
+  `${API_BASE}/google/sheets/1s5kDdMh0g1NP_FDkxDp5obPu6i7csuMtTYLlM5nnE78/data?range=Consolidado`
 ];
 
 const SEARCH_API_URLS = [
@@ -46,6 +48,24 @@ const parseSearchDate = (dateString: string): Date => {
   }
 };
 
+const normalizeHeader = (header: string): string =>
+  header
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .trim();
+
+// As planilhas dos clientes não compartilham exatamente as mesmas colunas
+// (ex.: "Viewbility" só existe em algumas, "Image" só em outras), então a
+// posição de cada campo é resolvida pelo cabeçalho, e não por índice fixo.
+const buildColumnIndex = (headerRow: string[]): Record<string, number> => {
+  const columns: Record<string, number> = {};
+  headerRow.forEach((header, index) => {
+    columns[normalizeHeader(header || '')] = index;
+  });
+  return columns;
+};
+
 const normalizeVeiculo = (veiculo: string): string => {
   const normalized = veiculo.trim();
   const lower = normalized.toLowerCase();
@@ -65,45 +85,51 @@ export const fetchCampaignData = async (): Promise<ProcessedCampaignData[]> => {
 
     responses.forEach(response => {
       if (response.data.success && response.data.data.values.length > 1) {
-        const rows = response.data.data.values.slice(1);
+        const [headerRow, ...rows] = response.data.data.values;
+        const columns = buildColumnIndex(headerRow);
+        const piColumn = columns['numero pi'];
+
+        const cell = (row: string[], header: string): string => {
+          const index = columns[header];
+          return index === undefined ? '' : (row[index] || '');
+        };
 
         rows.forEach(row => {
-          if (row.length >= 20) {
-            const numeroPi = row[19] || '';
-            const veiculoRaw = row[14] || '';
-            const veiculo = normalizeVeiculo(veiculoRaw);
-            const cliente = row[20] || '';
+          // Ignora linhas incompletas (a API omite as células vazias do fim)
+          if (piColumn !== undefined && row.length <= piColumn) return;
 
-            // Ignora linhas onde o Número PI é "#VALUE!", EXCETO para Google Search
-            if (numeroPi === '#VALUE!' && veiculo !== 'Google Search') {
-              return;
-            }
+          const numeroPi = cell(row, 'numero pi');
+          const veiculo = normalizeVeiculo(cell(row, 'veiculo'));
 
-            const dataRow: ProcessedCampaignData = {
-              date: parseDate(row[0]),
-              campaignName: row[1] || '',
-              adSetName: row[2] || '',
-              adName: row[3] || '',
-              cost: parseCurrency(row[4]),
-              impressions: parseNumber(row[5]),
-              reach: parseNumber(row[6]),
-              clicks: parseNumber(row[7]),
-              videoViews: parseNumber(row[8]),
-              videoViews25: parseNumber(row[9]),
-              videoViews50: parseNumber(row[10]),
-              videoViews75: parseNumber(row[11]),
-              videoCompletions: parseNumber(row[12]),
-              totalEngagements: parseNumber(row[13]),
-              veiculo: veiculo,
-              tipoDeCompra: row[15] || '',
-              videoEstaticoAudio: row[16] || '',
-              image: row[17] || '',
-              campanha: row[18] || '',
-              numeroPi: numeroPi,
-              cliente: cliente
-            };
-            allData.push(dataRow);
+          // Ignora linhas onde o Número PI é "#VALUE!", EXCETO para Google Search
+          if (numeroPi === '#VALUE!' && veiculo !== 'Google Search') {
+            return;
           }
+
+          const dataRow: ProcessedCampaignData = {
+            date: parseDate(cell(row, 'date')),
+            campaignName: cell(row, 'campaign name'),
+            adSetName: cell(row, 'ad set name'),
+            adName: cell(row, 'ad name'),
+            cost: parseCurrency(cell(row, 'cost')),
+            impressions: parseNumber(cell(row, 'impressions')),
+            reach: parseNumber(cell(row, 'reach')),
+            clicks: parseNumber(cell(row, 'clicks')),
+            videoViews: parseNumber(cell(row, 'video views')),
+            videoViews25: parseNumber(cell(row, 'video views 25%')),
+            videoViews50: parseNumber(cell(row, 'video views 50%')),
+            videoViews75: parseNumber(cell(row, 'video views 75%')),
+            videoCompletions: parseNumber(cell(row, 'video completions')),
+            totalEngagements: parseNumber(cell(row, 'total engagements')),
+            veiculo: veiculo,
+            tipoDeCompra: cell(row, 'tipo de compra'),
+            videoEstaticoAudio: cell(row, 'video_estatico_audio'),
+            image: cell(row, 'image'),
+            campanha: cell(row, 'campanha'),
+            numeroPi: numeroPi,
+            cliente: cell(row, 'cliente')
+          };
+          allData.push(dataRow);
         });
       }
     });
