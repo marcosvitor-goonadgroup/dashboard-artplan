@@ -352,7 +352,15 @@ export const generateWeeklyAnalysis = async (
       previousWeekData.length > 0 ? previousWeekData : null
     );
 
-    const analysis = await callOpenAIAPI(prompt);
+    let analysis: string;
+    try {
+      analysis = await callOpenAIAPI(prompt);
+    } catch (openaiError: any) {
+      console.warn('⚠️ OpenAI falhou, tentando Gemini como fallback...', openaiError.message);
+      const { generateWeeklyAnalysis: geminiWeekly } = await import('./gemini');
+      const geminiResult = await geminiWeekly(currentWeekData, allData, dataKey, forceRefresh);
+      return geminiResult;
+    }
 
     await setCachedAnalysis(dataKey, analysis);
 
@@ -588,7 +596,15 @@ export const generateCreativeAnalysis = async (
 
     const prompt = await buildCreativeAnalysisPrompt(currentWeekData);
 
-    const analysis = await callOpenAIAPI(prompt);
+    let analysis: string;
+    try {
+      analysis = await callOpenAIAPI(prompt);
+    } catch (openaiError: any) {
+      console.warn('⚠️ OpenAI falhou, tentando Gemini como fallback...', openaiError.message);
+      const { generateCreativeAnalysis: geminiCreative } = await import('./gemini');
+      const geminiResult = await geminiCreative(currentWeekData, dataKey, forceRefresh);
+      return geminiResult;
+    }
 
     await setCachedAnalysis(dataKey, analysis);
 

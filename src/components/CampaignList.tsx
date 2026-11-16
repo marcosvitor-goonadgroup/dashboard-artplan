@@ -2,7 +2,7 @@ import { CampaignSummary, ProcessedCampaignData, Filters, CampaignMetrics } from
 import { useMemo, useState } from 'react';
 import { subDays } from 'date-fns';
 import { toSlug } from '../utils/slug';
-import { getClientLogo } from '../config/clientLogos';
+import { getClientLogo as clientLogo } from '../config/clientLogos';
 
 interface CampaignListProps {
   campaigns: CampaignSummary[];
@@ -16,6 +16,7 @@ interface CampaignListProps {
   selectedVehicle?: string | null;
   selectedClient?: string | null;
   onSelectClient?: (client: string | null) => void;
+  /** Último dia com dados; a janela de 7 dias é contada a partir dele. */
   maxAvailableDate?: Date;
 }
 
@@ -54,6 +55,17 @@ const CampaignList = ({
   const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set());
   const [expandedCampaigns, setExpandedCampaigns] = useState<Set<string>>(new Set());
 
+  // Último dia com dados (usa a prop quando disponível). A janela de 7 dias e
+  // o status ativo/inativo partem dele, igual aos demais cards do dashboard.
+  const latestDataDate = useMemo(
+    () => maxAvailableDate ?? (data ?? []).reduce(
+      (latest, d) => (d.date > latest ? d.date : latest),
+      new Date(0)
+    ),
+    [maxAvailableDate, data]
+  );
+  const sevenDaysAgo = useMemo(() => subDays(latestDataDate, 7), [latestDataDate]);
+
   // Função para calcular métricas - definida antes dos useMemo que a utilizam
   const calculateMetrics = (items: ProcessedCampaignData[]): CampaignMetrics => {
     const totals = items.reduce(
@@ -86,16 +98,7 @@ const CampaignList = ({
 
     let filteredData = [...data];
 
-    // Determina o último dia com dados (usa prop quando disponível)
-    const latestDataDate = maxAvailableDate ?? data.reduce(
-      (latest, d) => (d.date > latest ? d.date : latest),
-      new Date(0)
-    );
-
     // Aplica filtros de data
-    const yesterday = subDays(new Date(), 1);
-    filteredData = filteredData.filter(item => item.date <= yesterday);
-
     if (filters?.dateRange.start) {
       filteredData = filteredData.filter(d => d.date >= filters.dateRange.start!);
     }
@@ -103,9 +106,8 @@ const CampaignList = ({
       filteredData = filteredData.filter(d => d.date <= filters.dateRange.end!);
     }
 
-    // Aplica filtro de período (usa último dia com dados como base)
+    // Aplica filtro de período
     if (periodFilter === '7days') {
-      const sevenDaysAgo = subDays(latestDataDate, 7);
       filteredData = filteredData.filter(item => item.date >= sevenDaysAgo);
     }
 
@@ -140,9 +142,8 @@ const CampaignList = ({
       const clientMetrics = calculateMetrics(clientItems);
 
       // Verifica se cliente está ativo (últimos 7 dias a partir do último dado)
-      const sevenDaysAgoFromLatest = subDays(latestDataDate, 7);
       const isClientActive = clientItems.some(
-        d => d.date > sevenDaysAgoFromLatest && (d.impressions > 0 || d.clicks > 0 || d.videoViews > 0) && d.cost > 0
+        d => d.date > sevenDaysAgo && (d.impressions > 0 || d.clicks > 0 || d.videoViews > 0 || d.videoCompletions > 0 || d.totalEngagements > 0) && d.cost > 0
       );
 
       // Cria campanhas do cliente
@@ -154,7 +155,7 @@ const CampaignList = ({
             new Date(0)
           );
           const isActive = campanhaItems.some(
-            d => d.date > sevenDaysAgoFromLatest && (d.impressions > 0 || d.clicks > 0 || d.videoViews > 0) && d.cost > 0
+            d => d.date > sevenDaysAgo && (d.impressions > 0 || d.clicks > 0 || d.videoViews > 0 || d.videoCompletions > 0 || d.totalEngagements > 0) && d.cost > 0
           );
 
           return {
@@ -176,7 +177,7 @@ const CampaignList = ({
 
     // Ordena clientes por investimento
     return clients.sort((a, b) => b.metrics.investimento - a.metrics.investimento);
-  }, [data, filters, periodFilter, selectedVehicle, maxAvailableDate]);
+  }, [data, filters, periodFilter, selectedVehicle, sevenDaysAgo]);
 
   // Calcula os PIs disponíveis para cada campanha
   const campaignPIs = useMemo(() => {
@@ -186,13 +187,6 @@ const CampaignList = ({
 
     let filteredData = [...data];
 
-    const latestDate = maxAvailableDate ?? data.reduce(
-      (latest, d) => (d.date > latest ? d.date : latest),
-      new Date(0)
-    );
-
-    filteredData = filteredData.filter(item => item.date <= latestDate);
-
     if (filters?.dateRange.start) {
       filteredData = filteredData.filter(d => d.date >= filters.dateRange.start!);
     }
@@ -201,7 +195,6 @@ const CampaignList = ({
     }
 
     if (periodFilter === '7days') {
-      const sevenDaysAgo = subDays(latestDate, 7);
       filteredData = filteredData.filter(item => item.date >= sevenDaysAgo);
     }
 
@@ -224,7 +217,7 @@ const CampaignList = ({
     });
 
     return result;
-  }, [data, filters, periodFilter, selectedVehicle]);
+  }, [data, filters, periodFilter, selectedVehicle, sevenDaysAgo]);
 
   const handlePIClick = (pi: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -237,8 +230,16 @@ const CampaignList = ({
     const newExpanded = new Set(expandedClients);
     if (newExpanded.has(clientName)) {
       newExpanded.delete(clientName);
+      // Ao colapsar, remove o filtro de cliente se estava selecionado
+      if (selectedClient === clientName && onSelectClient) {
+        onSelectClient(null);
+      }
     } else {
       newExpanded.add(clientName);
+      // Ao expandir, aplica o filtro de cliente
+      if (onSelectClient) {
+        onSelectClient(clientName);
+      }
     }
     setExpandedClients(newExpanded);
   };
@@ -252,13 +253,6 @@ const CampaignList = ({
       newExpanded.add(campaignName);
     }
     setExpandedCampaigns(newExpanded);
-  };
-
-  const handleClientSelect = (clientName: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (onSelectClient) {
-      onSelectClient(selectedClient === clientName ? null : clientName);
-    }
   };
 
   const totalCampaigns = clientsData.reduce((sum, client) => sum + client.campanhas.length, 0);
@@ -317,9 +311,9 @@ const CampaignList = ({
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-3">
                       {/* Logo do cliente ou ícone padrão */}
-                      {getClientLogo(client.nome) ? (
+                      {clientLogo(client.nome) ? (
                         <img
-                          src={getClientLogo(client.nome)}
+                          src={clientLogo(client.nome)}
                           alt={client.nome}
                           className="h-8 w-28 object-contain object-left"
                         />
@@ -356,23 +350,14 @@ const CampaignList = ({
                         </p>
                         <p className="text-xs text-gray-500">{formatNumber(client.metrics.impressoes)} imp.</p>
                       </div>
-                      <button
-                        onClick={(e) => handleClientSelect(client.nome, e)}
-                        className={`px-2 py-1 text-xs rounded ${
-                          selectedClient === client.nome
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                        }`}
-                      >
-                        Filtrar
-                      </button>
+                      {/* Ícone de olho — abre dashboard do cliente */}
                       <a
                         href={`/${toSlug(client.nome)}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
+                        onClick={e => e.stopPropagation()}
                         title={`Ver dashboard de ${client.nome}`}
-                        className="flex items-center justify-center w-7 h-7 rounded bg-gray-100 hover:bg-blue-600 text-gray-500 hover:text-white transition-colors shrink-0"
+                        className="flex items-center justify-center w-8 h-8 rounded-xl bg-gray-100 hover:bg-[#153ece] text-gray-400 hover:text-white transition-colors shrink-0"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -433,6 +418,19 @@ const CampaignList = ({
                                 <span>{formatNumber(campaign.metrics.cliques)} cliques</span>
                               </div>
                             </div>
+                            <a
+                              href={`/${toSlug(client.nome)}/${toSlug(campaign.nome)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={e => e.stopPropagation()}
+                              title={`Ver dashboard de ${campaign.nome}`}
+                              className="flex items-center justify-center w-7 h-7 rounded-lg bg-gray-100 hover:bg-[#153ece] text-gray-400 hover:text-white transition-colors shrink-0"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                              </svg>
+                            </a>
                             <svg
                               className={`w-4 h-4 text-gray-400 transition-transform flex-shrink-0 ${
                                 expandedCampaigns.has(campaign.nome) ? 'rotate-180' : ''

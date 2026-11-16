@@ -13,7 +13,7 @@ const formatNumber = (num: number): string => {
 };
 
 const SearchTermsAnalysis = ({ data, selectedCampaign, periodFilter }: SearchTermsAnalysisProps) => {
-  const [minClicks, setMinClicks] = useState<number>(10);
+  const [minClicks, setMinClicks] = useState<number>(1);
 
   // Aggregate data by search term
   const aggregatedTerms = useMemo(() => {

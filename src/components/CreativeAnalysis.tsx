@@ -12,7 +12,10 @@ interface CreativeAnalysisProps {
   selectedCampaign: string | null;
 }
 
-const CreativeAnalysis = ({ data, periodFilter, selectedCampaign }: CreativeAnalysisProps) => {
+const CreativeAnalysis = ({ data: rawData, periodFilter, selectedCampaign }: CreativeAnalysisProps) => {
+  // Linhas de termo de busca não são criativos (viraria um criativo "Sem nome").
+  const data = useMemo(() => rawData.filter(d => !d.searchTerm), [rawData]);
+
   const [analysis, setAnalysis] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

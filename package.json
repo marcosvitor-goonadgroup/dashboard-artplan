@@ -37,6 +37,7 @@
     "react-tsparticles": "^2.12.2",
     "recharts": "^3.5.1",
     "tsparticles": "^3.9.1",
-    "tsparticles-slim": "^2.12.0"
+    "tsparticles-slim": "^2.12.0",
+    "write-excel-file": "^4.1.1"
   }
 }

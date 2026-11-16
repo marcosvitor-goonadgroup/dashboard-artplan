@@ -4,6 +4,7 @@ import BenchmarkIndicator from './BenchmarkIndicator';
 import CreativeImage from './CreativeImage';
 import CreativeDetailModal from './CreativeDetailModal';
 import { fetchAllBenchmarks, BenchmarkData } from '../services/benchmarkService';
+import { getFallbackImageUrl } from '../services/creativeImageService';
 
 interface CreativePerformanceProps {
   data: ProcessedCampaignData[];
@@ -92,6 +93,9 @@ const CreativePerformance = ({ data }: CreativePerformanceProps) => {
     const tiposCompraSet = new Set<string>();
 
     data.forEach(item => {
+      // Linha de termo de busca não é criativo — fica de fora. Google Search
+      // vindo do Consolidado (por anúncio, sem termo) continua aparecendo.
+      if (item.searchTerm) return;
       if (item.campanha) campanhasSet.add(item.campanha);
       if (item.veiculo) veiculosSet.add(item.veiculo);
       if (item.tipoDeCompra) tiposCompraSet.add(item.tipoDeCompra);
@@ -107,8 +111,8 @@ const CreativePerformance = ({ data }: CreativePerformanceProps) => {
   // Filter and aggregate data by creative (adName)
   const creativeData = useMemo(() => {
     // Os dados já vêm filtrados do componente pai (displayData)
-    // Aqui aplicamos apenas os filtros locais deste componente
-    let filteredData = data;
+    // Termos de busca são analisados no card próprio, não aqui.
+    let filteredData = data.filter(d => !d.searchTerm);
 
     // Apply local filters (veículo e tipo de compra)
     if (selectedVeiculo !== 'all') {
@@ -165,7 +169,7 @@ const CreativePerformance = ({ data }: CreativePerformanceProps) => {
           veiculo: item.veiculo,
           tipoDeCompra: item.tipoDeCompra,
           tipoMidia: item.tipoMidia,
-          imageUrl: item.imageUrl,
+          imageUrl: item.imageUrl || getFallbackImageUrl(item.name) || '',
           impressoes: item.impressoes,
           cliques: item.cliques,
           views: item.views,

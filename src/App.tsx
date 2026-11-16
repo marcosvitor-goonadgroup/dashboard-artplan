@@ -4,6 +4,7 @@ import ClientDashboard from './pages/ClientDashboard';
 import CampaignDashboard from './pages/CampaignDashboard';
 import PIDashboard from './pages/PIDashboard';
 import Header from './components/Header';
+import Footer from './components/Footer';
 import BigNumbers from './components/BigNumbers';
 import CampaignList from './components/CampaignList';
 import ImpressionsChart from './components/ImpressionsChart';
@@ -16,10 +17,12 @@ import OnDemandAnalysis from './components/OnDemandAnalysis';
 import CreativeAnalysis from './components/CreativeAnalysis';
 import ParticlesBackground from './components/ParticlesBackground';
 import PIInfoCard from './components/PIInfoCard';
-import { subDays } from 'date-fns';
+import SearchTermsAnalysis from './components/SearchTermsAnalysis';
+import { toSearchTermsData } from './utils/searchTerms';
+import { subDays, format } from 'date-fns';
 
 const DashboardContent = () => {
-  const { loading, error, campaigns, filteredData, filters, setFilters, data } = useCampaign();
+  const { loading, error, campaigns, filteredData, filters, setFilters, data, agencia } = useCampaign();
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   const [selectedCampaign, setSelectedCampaign] = useState<string | null>(null);
   const [periodFilter, setPeriodFilter] = useState<'7days' | 'all'>('7days');
@@ -35,15 +38,11 @@ const DashboardContent = () => {
     }
   }, [filters.dateRange.start, filters.dateRange.end]);
 
-  // Calcula a data máxima disponível nos dados (exclui D-1)
+  // Calcula a data máxima disponível nos dados
   // IMPORTANTE: usa 'data' (não filtrado) para calcular corretamente os últimos 7 dias disponíveis
   const maxAvailableDate = useMemo(() => {
-    const yesterday = subDays(new Date(), 1);
-    const datesInData = data
-      .map(item => item.date)
-      .filter(date => date <= yesterday);
-
-    if (datesInData.length === 0) return yesterday;
+    const datesInData = data.map(item => item.date);
+    if (datesInData.length === 0) return new Date();
     return new Date(Math.max(...datesInData.map(d => d.getTime())));
   }, [data]);
 
@@ -51,6 +50,11 @@ const DashboardContent = () => {
   const sevenDaysAgoFromMaxDate = useMemo(() => {
     return subDays(maxAvailableDate, 7);
   }, [maxAvailableDate]);
+
+  const minAvailableDate = useMemo(() => {
+    if (data.length === 0) return new Date();
+    return new Date(Math.min(...data.map(d => d.date.getTime())));
+  }, [data]);
 
   // Calcula os benchmarks gerais a partir de TODOS os dados (sem filtros) - CÁLCULO LOCAL
   const generalBenchmarks = useMemo(() => {
@@ -112,10 +116,6 @@ const DashboardContent = () => {
 
   const displayData = useMemo(() => {
     let filteredDataCopy = filteredData;
-
-    // Sempre exclui o dia atual (considera apenas até D-1)
-    const yesterday = subDays(new Date(), 1);
-    filteredDataCopy = filteredDataCopy.filter(item => item.date <= yesterday);
 
     // Filter by period - usa os últimos 7 dias disponíveis nos dados
     if (periodFilter === '7days') {
@@ -218,6 +218,9 @@ const DashboardContent = () => {
     };
   }, [displayData]);
 
+  // Termos de busca do Google Search para o card dedicado
+  const searchTermsData = useMemo(() => toSearchTermsData(displayData), [displayData]);
+
   const activeFiltersCount = useMemo(() => {
     let count = 0;
     if (filters.dateRange.start || filters.dateRange.end) count++;
@@ -273,21 +276,27 @@ const DashboardContent = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 relative">
+    <div className="min-h-screen bg-[#f1f1f1] relative">
       <ParticlesBackground />
-      <div className="relative z-10">
+      <div className="relative z-10 max-w-[1440px] mx-auto px-3 sm:px-6 pt-3 sm:pt-6 pb-3 sm:pb-6">
         <Header
           onOpenFilters={() => setIsFiltersOpen(true)}
           onClearFilters={handleClearFilters}
           activeFiltersCount={activeFiltersCount}
+          agencia={agencia}
         />
         <Filters isOpen={isFiltersOpen} onClose={() => setIsFiltersOpen(false)} />
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main>
         <div className="space-y-6">
           <div>
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3 gap-2">
-              <h2 className="text-xs sm:text-sm font-medium text-gray-600">Resultados</h2>
+              <h2 className="text-xs sm:text-sm font-medium text-gray-600">
+                Resultados{' '}
+                <span className="text-gray-400 font-normal">
+                  {format(periodFilter === '7days' ? sevenDaysAgoFromMaxDate : minAvailableDate, 'dd/MM/yyyy')} à {format(maxAvailableDate, 'dd/MM/yyyy')}
+                </span>
+              </h2>
 
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-4 w-full sm:w-auto">
                 {/* Botões de Período */}
@@ -346,7 +355,7 @@ const DashboardContent = () => {
             <div>
               <PIInfoCard
                 numeroPi={selectedPI}
-                campaignData={filteredData.filter(d => d.numeroPi === selectedPI)}
+                campaignData={selectedPI ? filteredData.filter(d => d.numeroPi === selectedPI) : []}
               />
             </div>
           )}
@@ -422,6 +431,16 @@ const DashboardContent = () => {
             />
           </div>
 
+          {searchTermsData.length > 0 && (
+            <div>
+              <SearchTermsAnalysis
+                data={searchTermsData}
+                selectedCampaign={null}
+                periodFilter="all"
+              />
+            </div>
+          )}
+
           <div>
             <CreativeAnalysis
               data={displayData}
@@ -432,6 +451,8 @@ const DashboardContent = () => {
 
         </div>
       </main>
+
+      <Footer />
       </div>
     </div>
   );

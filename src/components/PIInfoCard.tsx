@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { PIInfo, ProcessedCampaignData } from '../types/campaign';
-import { fetchPIInfo } from '../services/api';
+import { fetchPIInfo, hasPIInfoSource } from '../services/api';
 import { parse, isValid, differenceInDays } from 'date-fns';
 
 interface PIInfoCardProps {
@@ -14,20 +14,30 @@ const fmt = (n: number) =>
 
 const fmtNum = (n: number) => new Intl.NumberFormat('pt-BR').format(Math.round(n));
 
+// Normaliza um nome de veículo para comparação (sem acentos, espaços ou maiúsculas).
+// O PI escreve "MOOVIT" e a entrega vem como "Moovit" — os dois viram "moovit".
+const DIACRITICS = new RegExp('[\\u0300-\\u036f]', 'g');
+// Pontuação vira espaço para que "Fb/Ig" e "Fb-Ig" continuem separando as palavras.
+const stripVehicle = (s: string): string =>
+  s.toLowerCase().normalize('NFD').replace(DIACRITICS, '').replace(/[^a-z0-9]+/g, ' ').trim();
+
+// Agrupa veículos em "famílias" para casar o previsto (tabela de PI) com o
+// realizado (entrega): "Fb Ig"/"META" ↔ Facebook + Instagram; "Google Ads" ↔
+// Google Ads + Google Search (o PI contrata "Google Ads", mas a entrega de
+// busca vem como "Google Search"). Veículos sem família usam o próprio nome.
+// Os dois lados são agrupados pela mesma chave (família|tipo de compra), então
+// cada linha realizada é somada uma única vez.
+const vehicleFamily = (name: string): string => {
+  const n = stripVehicle(name);
+  if (/face|insta|\bfb\b|\big\b|\bfbig\b|meta/.test(n)) return 'meta';
+  if (/google|youtube|search/.test(n)) return 'google';
+  return n.replace(/ /g, '');
+};
+
 const PIInfoCard = ({ numeroPi, campaignData = [], defaultExpanded = false }: PIInfoCardProps) => {
   const [piInfo, setPiInfo] = useState<PIInfo[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
-
-  // Agrupa veículos em "famílias" para casar o previsto (tabela de PI) com o
-  // realizado (Consolidado): "Fb Ig" ↔ Facebook + Instagram; "Google Ads" ↔
-  // Google Ads + Google Search. Veículos sem família usam o próprio nome.
-  const veiculoGroup = (name: string): string => {
-    const n = name.toLowerCase().trim();
-    if (/face|insta|\bfb\b|\big\b|meta/.test(n)) return 'meta';
-    if (/google|youtube|search/.test(n)) return 'google';
-    return n;
-  };
 
   // Pacing temporal: % dos dias decorridos no período do PI
   const pacingExpected = useMemo(() => {
@@ -50,16 +60,15 @@ const PIInfoCard = ({ numeroPi, campaignData = [], defaultExpanded = false }: PI
         acc.realizado += item.realInvestment || item.cost;
         acc.impressoes += item.impressions;
         acc.cliques += item.clicks;
+        acc.views += item.videoViews;
+        acc.views100 += item.videoCompletions;
         return acc;
       },
-      { realizado: 0, impressoes: 0, cliques: 0 }
+      { realizado: 0, impressoes: 0, cliques: 0, views: 0, views100: 0 }
     );
   }, [campaignData]);
 
-  // Detalhamento por família de veículo + tipo do PI, cruzado com os dados realizados.
-  // Ambos os lados são agrupados por (grupoVeiculo|tipoDeCompra) para que famílias
-  // como Facebook+Instagram ("Fb Ig") e Google Ads+Google Search ("Google Ads")
-  // somem todo o investimento/volume realizado correspondente.
+  // Detalhamento por família de veículo + tipo do PI, cruzado com os dados realizados
   const veiculacaoPorVeiculoTipo = useMemo(() => {
     if (!piInfo || piInfo.length === 0) return [];
 
@@ -71,7 +80,7 @@ const PIInfoCard = ({ numeroPi, campaignData = [], defaultExpanded = false }: PI
     }>();
 
     piInfo.forEach(info => {
-      const key = `${veiculoGroup(info.veiculo)}|${info.modeloCompra.toUpperCase()}`;
+      const key = `${vehicleFamily(info.veiculo)}|${info.modeloCompra.toUpperCase()}`;
       const valor = parseFloat(info.totalBruto.replace('R$', '').replace(/\./g, '').replace(',', '.').trim()) || 0;
       const qtd = parseFloat(info.quantidade.replace(/\./g, '').replace(',', '.').trim()) || 0;
       const e = piGrouped.get(key) ?? { veiculos: new Set<string>(), tipoDeCompra: info.modeloCompra, previsto: 0, quantidade: 0 };
@@ -81,13 +90,16 @@ const PIInfoCard = ({ numeroPi, campaignData = [], defaultExpanded = false }: PI
       piGrouped.set(key, e);
     });
 
-    const realizadoGrouped = new Map<string, { realizado: number; cliques: number; impressoes: number }>();
+    // Realizado agrupado pela mesma chave família + tipo de compra.
+    const realizadoGrouped = new Map<string, { realizado: number; cliques: number; impressoes: number; views: number; views100: number }>();
     campaignData.forEach(item => {
-      const key = `${veiculoGroup(item.veiculo)}|${item.tipoDeCompra.toUpperCase()}`;
-      const e = realizadoGrouped.get(key) ?? { realizado: 0, cliques: 0, impressoes: 0 };
+      const key = `${vehicleFamily(item.veiculo)}|${item.tipoDeCompra.toUpperCase()}`;
+      const e = realizadoGrouped.get(key) ?? { realizado: 0, cliques: 0, impressoes: 0, views: 0, views100: 0 };
       e.realizado += item.realInvestment || item.cost;
       e.cliques += item.clicks;
       e.impressoes += item.impressions;
+      e.views += item.videoViews;
+      e.views100 += item.videoCompletions;
       realizadoGrouped.set(key, e);
     });
 
@@ -99,24 +111,40 @@ const PIInfoCard = ({ numeroPi, campaignData = [], defaultExpanded = false }: PI
       quantidade: number;
       impressoesRealizadas: number;
       cliquesRealizados: number;
+      viewsRealizados: number;
+      views100Realizadas: number;
+      matchedByVehicle: boolean;
     }> = [];
 
     piGrouped.forEach((piData, key) => {
-      let match = realizadoGrouped.get(key);
+      const m = realizadoGrouped.get(key);
+      const matchedByVehicle = !!m;
+      let realizado = m?.realizado ?? 0;
+      let cliques = m?.cliques ?? 0;
+      let impressoes = m?.impressoes ?? 0;
+      let views = m?.views ?? 0;
+      let views100 = m?.views100 ?? 0;
 
-      // Se o PI tem uma única linha, todo o realizado pertence a ela
-      if (!match && piGrouped.size === 1) {
-        match = { realizado: totaisRealizados.realizado, cliques: totaisRealizados.cliques, impressoes: totaisRealizados.impressoes };
+      // Último recurso: PI com um único veículo e sem match por nome → usa os totais.
+      if (!matchedByVehicle && piGrouped.size === 1) {
+        realizado = totaisRealizados.realizado;
+        cliques = totaisRealizados.cliques;
+        impressoes = totaisRealizados.impressoes;
+        views = totaisRealizados.views;
+        views100 = totaisRealizados.views100;
       }
 
       resultado.push({
         veiculo: Array.from(piData.veiculos).join(' / '),
         tipoDeCompra: piData.tipoDeCompra,
         previsto: piData.previsto,
-        realizado: match?.realizado ?? 0,
+        realizado,
         quantidade: piData.quantidade,
-        impressoesRealizadas: match?.impressoes ?? 0,
-        cliquesRealizados: match?.cliques ?? 0,
+        impressoesRealizadas: impressoes,
+        cliquesRealizados: cliques,
+        viewsRealizados: views,
+        views100Realizadas: views100,
+        matchedByVehicle,
       });
     });
 
@@ -136,9 +164,9 @@ const PIInfoCard = ({ numeroPi, campaignData = [], defaultExpanded = false }: PI
 
   if (loading) {
     return (
-      <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
+      <div className="bg-white rounded-[24px] shadow border border-gray-200 p-6">
         <div className="flex items-center justify-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#153ece]" />
           <span className="ml-3 text-gray-600">Carregando informações do PI...</span>
         </div>
       </div>
@@ -147,9 +175,13 @@ const PIInfoCard = ({ numeroPi, campaignData = [], defaultExpanded = false }: PI
 
   if (!piInfo || piInfo.length === 0) {
     return (
-      <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
+      <div className="bg-white rounded-[24px] shadow border border-gray-200 p-6">
         <h3 className="text-lg font-semibold text-gray-800 mb-2">Informações do PI {numeroPi}</h3>
-        <p className="text-gray-500">Nenhuma informação encontrada para este PI.</p>
+        <p className="text-gray-500">
+          {hasPIInfoSource()
+            ? 'Nenhuma informação encontrada para este PI.'
+            : 'Base de PIs ainda não configurada para esta agência — sem dados de contratado x realizado.'}
+        </p>
       </div>
     );
   }
@@ -162,21 +194,20 @@ const PIInfoCard = ({ numeroPi, campaignData = [], defaultExpanded = false }: PI
   const pacingOk = totaisRealizados.realizado >= pacingInvestPrevisto;
 
   return (
-    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg shadow-lg border border-blue-200 overflow-hidden">
+    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-[24px] shadow-lg border border-blue-200 overflow-hidden">
       {/* Header */}
       <div className="p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-xl font-bold text-gray-800">PI {numeroPi}</h3>
           <div className="flex items-center gap-2">
             {firstInfo.status && (
-              <span className="px-3 py-1 bg-blue-600 text-white text-xs font-semibold rounded-full">
+              <span className="px-3 py-1 bg-[#153ece] text-white text-xs font-semibold rounded-full">
                 {firstInfo.status}
               </span>
             )}
             <button
               onClick={() => setIsExpanded(!isExpanded)}
               className="p-2 hover:bg-blue-100 rounded-lg transition-colors"
-              aria-label={isExpanded ? 'Recolher informações' : 'Expandir informações'}
             >
               <svg
                 className={`w-5 h-5 text-gray-600 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
@@ -190,7 +221,7 @@ const PIInfoCard = ({ numeroPi, campaignData = [], defaultExpanded = false }: PI
 
         {/* Período + Investimento */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-          <div className="bg-white rounded-lg p-4 shadow-sm">
+          <div className="bg-white rounded-xl p-4 shadow-sm">
             <p className="text-xs font-medium text-gray-500 mb-1">Período</p>
             <p className="text-sm font-semibold text-gray-800">{firstInfo.inicio} a {firstInfo.fim}</p>
             {pacingExpected && (
@@ -201,7 +232,7 @@ const PIInfoCard = ({ numeroPi, campaignData = [], defaultExpanded = false }: PI
             )}
           </div>
 
-          <div className="bg-white rounded-lg p-4 shadow-sm">
+          <div className="bg-white rounded-xl p-4 shadow-sm">
             <p className="text-xs font-medium text-gray-500 mb-1">Investimento Contratado</p>
             <p className="text-sm font-semibold text-gray-800">{fmt(totalInvestimento)}</p>
             {pacingExpected && (
@@ -233,7 +264,7 @@ const PIInfoCard = ({ numeroPi, campaignData = [], defaultExpanded = false }: PI
 
         {/* Objetivo */}
         {firstInfo.objetivo && (
-          <div className="bg-white rounded-lg p-4 shadow-sm">
+          <div className="bg-white rounded-xl p-4 shadow-sm">
             <p className="text-xs font-medium text-gray-500 mb-2">Objetivo</p>
             <p className="text-sm text-gray-700 leading-relaxed">{firstInfo.objetivo}</p>
           </div>
@@ -245,23 +276,38 @@ const PIInfoCard = ({ numeroPi, campaignData = [], defaultExpanded = false }: PI
         <div className="px-6 pb-6 space-y-4">
 
           {/* Detalhamento por Veículo */}
-          <div className="bg-white rounded-lg p-4 shadow-sm">
+          <div className="bg-white rounded-xl p-4 shadow-sm">
             <p className="text-xs font-medium text-gray-500 mb-3">Detalhamento por Veículo</p>
             <div className="space-y-4">
               {veiculacaoPorVeiculoTipo.map((item, index) => {
-                const isCPM = item.tipoDeCompra.toUpperCase().includes('CPM');
-                const isCPC = item.tipoDeCompra.toUpperCase().includes('CPC');
+                // CPCV é testado primeiro: "CPCV" contém "CPC" como substring.
+                const tipoUpper = item.tipoDeCompra.toUpperCase();
+                const isCPCV = tipoUpper.includes('CPCV');
+                const isCPM = !isCPCV && tipoUpper.includes('CPM');
+                const isCPC = !isCPCV && tipoUpper.includes('CPC');
+                const isCPV = !isCPCV && tipoUpper.includes('CPV');
                 const pacingPrevisto = item.previsto * (pacingExpected?.percentElapsed ?? 1);
                 const investOk = item.realizado >= pacingPrevisto;
 
-                const volumeRealizado = isCPM ? item.impressoesRealizadas : isCPC ? item.cliquesRealizados : 0;
+                const volumeLabel = isCPM ? 'Impressões' : isCPC ? 'Cliques' : isCPCV ? 'Views 100%' : isCPV ? 'Views' : '';
+                const volumeBadge = isCPM ? 'Impr.' : isCPC ? 'Cliques' : isCPCV ? 'Views 100%' : 'Views';
+                const hasVolume = isCPM || isCPC || isCPV || isCPCV;
+                const volumeRealizado = isCPM
+                  ? item.impressoesRealizadas
+                  : isCPC
+                    ? item.cliquesRealizados
+                    : isCPCV
+                      ? item.views100Realizadas
+                      : isCPV
+                        ? item.viewsRealizados
+                        : 0;
                 const volumePacingPrevisto = item.quantidade * (pacingExpected?.percentElapsed ?? 1);
                 const volumePercent = item.quantidade > 0 ? Math.min((volumeRealizado / item.quantidade) * 100, 100) : 0;
                 const volumePacingPercent = item.quantidade > 0 ? Math.min((volumePacingPrevisto / item.quantidade) * 100, 100) : 0;
                 const volumeOk = volumeRealizado >= volumePacingPrevisto;
 
                 return (
-                  <div key={index} className="border-l-4 border-blue-600 pl-3 py-2 bg-gray-50 rounded-lg">
+                  <div key={index} className="border-l-4 border-[#153ece] pl-3 py-2 bg-gray-50 rounded-xl">
                     <div className="flex justify-between items-start mb-3">
                       <div>
                         <p className="text-sm font-semibold text-gray-800">{item.veiculo}</p>
@@ -271,9 +317,9 @@ const PIInfoCard = ({ numeroPi, campaignData = [], defaultExpanded = false }: PI
                         <span className={`px-2 py-0.5 text-xs font-semibold rounded-lg ${investOk ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                           {investOk ? '✓ Invest.' : '! Invest.'}
                         </span>
-                        {(isCPM || isCPC) && item.quantidade > 0 && (
+                        {hasVolume && item.quantidade > 0 && (
                           <span className={`px-2 py-0.5 text-xs font-semibold rounded-lg ${volumeOk ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                            {volumeOk ? `✓ ${isCPM ? 'Impr.' : 'Cliques'}` : `! ${isCPM ? 'Impr.' : 'Cliques'}`}
+                            {volumeOk ? `✓ ${volumeBadge}` : `! ${volumeBadge}`}
                           </span>
                         )}
                       </div>
@@ -300,11 +346,11 @@ const PIInfoCard = ({ numeroPi, campaignData = [], defaultExpanded = false }: PI
                       </div>
                     </div>
 
-                    {(isCPM || isCPC) && item.quantidade > 0 && (
+                    {hasVolume && item.quantidade > 0 && (
                       <div>
                         <div className="flex justify-between items-center mb-1">
                           <p className="text-xs text-gray-500">
-                            {isCPM ? 'Impressões' : 'Cliques'} contratados:{' '}
+                            {volumeLabel} contratados:{' '}
                             <span className="font-medium text-gray-700">{fmtNum(item.quantidade)}</span>
                           </p>
                           <p className="text-xs font-medium text-gray-600">
@@ -313,7 +359,7 @@ const PIInfoCard = ({ numeroPi, campaignData = [], defaultExpanded = false }: PI
                         </div>
                         <div className="relative h-3 bg-gray-200 rounded-full overflow-hidden">
                           <div
-                            className={`absolute h-full rounded-full transition-all ${volumeOk ? 'bg-green-500' : 'bg-blue-600'}`}
+                            className={`absolute h-full rounded-full transition-all ${volumeOk ? 'bg-green-500' : 'bg-[#153ece]'}`}
                             style={{ width: `${volumePercent}%` }}
                           />
                           {pacingExpected && (
@@ -335,6 +381,16 @@ const PIInfoCard = ({ numeroPi, campaignData = [], defaultExpanded = false }: PI
                             CPC Real: {fmt(item.realizado / item.cliquesRealizados)}
                           </p>
                         )}
+                        {isCPCV && item.realizado > 0 && item.views100Realizadas > 0 && (
+                          <p className="text-xs text-gray-500 mt-1">
+                            CPCV Real: {fmt(item.realizado / item.views100Realizadas)}
+                          </p>
+                        )}
+                        {isCPV && item.realizado > 0 && item.viewsRealizados > 0 && (
+                          <p className="text-xs text-gray-500 mt-1">
+                            CPV Real: {fmt(item.realizado / item.viewsRealizados)}
+                          </p>
+                        )}
                       </div>
                     )}
                   </div>
@@ -343,23 +399,23 @@ const PIInfoCard = ({ numeroPi, campaignData = [], defaultExpanded = false }: PI
             </div>
           </div>
 
-          {/* Praça + Segmentação + Público */}
+          {/* Praça + Segmentação + Público lado a lado */}
           {(firstInfo.praca || firstInfo.segmentacao || firstInfo.publico) && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {firstInfo.praca && (
-                <div className="bg-white rounded-lg p-4 shadow-sm">
+                <div className="bg-white rounded-xl p-4 shadow-sm">
                   <p className="text-xs font-medium text-gray-500 mb-2">Praça</p>
                   <p className="text-sm text-gray-700">{firstInfo.praca}</p>
                 </div>
               )}
               {firstInfo.segmentacao && (
-                <div className="bg-white rounded-lg p-4 shadow-sm">
+                <div className="bg-white rounded-xl p-4 shadow-sm">
                   <p className="text-xs font-medium text-gray-500 mb-2">Segmentação</p>
                   <p className="text-sm text-gray-700">{firstInfo.segmentacao}</p>
                 </div>
               )}
               {firstInfo.publico && (
-                <div className="bg-white rounded-lg p-4 shadow-sm">
+                <div className="bg-white rounded-xl p-4 shadow-sm">
                   <p className="text-xs font-medium text-gray-500 mb-2">Público</p>
                   <p className="text-sm text-gray-700">{firstInfo.publico}</p>
                 </div>

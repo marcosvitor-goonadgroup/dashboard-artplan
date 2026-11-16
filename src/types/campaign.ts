@@ -51,7 +51,9 @@ export interface ProcessedCampaignData {
   campanha: string;
   numeroPi: string;
   cliente: string;
+  agencia: string;
   realInvestment?: number; // Investimento calculado pela tabela de preços
+  searchTerm?: string; // Palavra-chave (apenas para veículo Google Search)
 }
 
 export interface CampaignMetrics {
@@ -166,3 +168,4 @@ export interface PIInfo {
   praca: string;
   objetivo: string;
 }
+

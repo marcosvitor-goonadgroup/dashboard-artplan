@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { ProcessedCampaignData } from '../types/campaign';
 import { format, subDays } from 'date-fns';
@@ -14,17 +14,25 @@ interface ImpressionsChartProps {
   sevenDaysAgoFromMaxDate?: Date; // 7 dias atrás a partir da data máxima
 }
 
-type MetricType = 'impressoes' | 'cliques' | 'views' | 'engajamento' | 'ctr' | 'vtr' | 'taxaEngajamento';
+type MetricType = 'impressoes' | 'cliques' | 'views' | 'views100' | 'engajamento' | 'ctr' | 'vtr' | 'taxaEngajamento';
 
 const metricOptions = [
   { value: 'impressoes', label: 'Impressões', type: 'count', color: '#0ea5e9' },
   { value: 'cliques', label: 'Cliques', type: 'count', color: '#8b5cf6' },
   { value: 'views', label: 'Views', type: 'count', color: '#10b981' },
+  { value: 'views100', label: 'Views 100%', type: 'count', color: '#14b8a6' },
   { value: 'engajamento', label: 'Engajamento', type: 'count', color: '#f59e0b' },
   { value: 'ctr', label: 'CTR', type: 'percentage', color: '#ef4444' },
   { value: 'vtr', label: 'VTR', type: 'percentage', color: '#ec4899' },
   { value: 'taxaEngajamento', label: 'Taxa Engajamento', type: 'percentage', color: '#6366f1' }
 ];
+
+const getDefaultMetric = (inputData: ProcessedCampaignData[]): MetricType => {
+  if (inputData.some(d => d.impressions > 0)) return 'impressoes';
+  if (inputData.some(d => d.videoViews > 0)) return 'views';
+  if (inputData.some(d => d.videoCompletions > 0)) return 'views100';
+  return 'engajamento';
+};
 
 const ImpressionsChart = ({
   data,
@@ -35,8 +43,13 @@ const ImpressionsChart = ({
   maxAvailableDate: propMaxAvailableDate,
   sevenDaysAgoFromMaxDate: propSevenDaysAgoFromMaxDate
 }: ImpressionsChartProps) => {
-  const [selectedMetrics, setSelectedMetrics] = useState<MetricType[]>(['impressoes']);
+  const [selectedMetrics, setSelectedMetrics] = useState<MetricType[]>(() => [getDefaultMetric(data)]);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+
+  const bestDefaultMetric = useMemo(() => getDefaultMetric(data), [data]);
+  useEffect(() => {
+    setSelectedMetrics([bestDefaultMetric]);
+  }, [bestDefaultMetric]);
 
   // Usa a data máxima disponível passada como prop, ou calcula localmente como fallback
   const yesterday = useMemo(() => {
@@ -90,6 +103,7 @@ const ImpressionsChart = ({
         investimento,
         cliques,
         views,
+        views100: videoCompletions,
         engajamento,
         cpm: totalImpressions > 0 ? (investimento / totalImpressions) * 1000 : 0,
         cpc: cliques > 0 ? investimento / cliques : 0,
@@ -103,8 +117,8 @@ const ImpressionsChart = ({
 
   const chartData = useMemo(() => {
     const currentPeriodData = periodFilter === '7days'
-      ? data.filter(item => item.date >= sevenDaysAgo && item.date <= yesterday)
-      : data.filter(item => item.date <= yesterday);
+      ? data.filter(item => item.date >= sevenDaysAgo)
+      : data;
 
     const currentData = processDataForPeriod(currentPeriodData);
 
@@ -149,40 +163,39 @@ const ImpressionsChart = ({
       // Adiciona dados do período anterior (com valores apenas para linha amarela)
       ...previousData.map(item => ({
         date: item.date,
-        // Valores do período anterior vão para a linha amarela
         impressoes_anterior: item.impressoes,
         cliques_anterior: item.cliques,
         views_anterior: item.views,
+        views100_anterior: item.views100,
         engajamento_anterior: item.engajamento,
         ctr_anterior: item.ctr,
         vtr_anterior: item.vtr,
         taxaEngajamento_anterior: item.taxaEngajamento,
-        // Deixa undefined para não mostrar linha azul nesse período
         impressoes: undefined,
         cliques: undefined,
         views: undefined,
+        views100: undefined,
         engajamento: undefined,
         ctr: undefined,
         vtr: undefined,
         taxaEngajamento: undefined,
         investimento: undefined
       })),
-      // Adiciona dados do período atual (com valores apenas para linha azul)
       ...currentData.map(item => ({
         date: item.date,
-        // Valores do período atual vão para a linha azul
         impressoes: item.impressoes,
         cliques: item.cliques,
         views: item.views,
+        views100: item.views100,
         engajamento: item.engajamento,
         ctr: item.ctr,
         vtr: item.vtr,
         taxaEngajamento: item.taxaEngajamento,
         investimento: item.investimento,
-        // Deixa undefined para não mostrar linha amarela nesse período
         impressoes_anterior: undefined,
         cliques_anterior: undefined,
         views_anterior: undefined,
+        views100_anterior: undefined,
         engajamento_anterior: undefined,
         ctr_anterior: undefined,
         vtr_anterior: undefined,
@@ -235,18 +248,21 @@ const ImpressionsChart = ({
     return `${value.toFixed(1)}%`;
   };
 
-  const formatTooltip = (value: number | undefined, name: string | undefined) => {
+  const formatTooltip = (value: unknown, name: unknown): string => {
     if (value === undefined || name === undefined) return '';
 
+    const numValue = value as number;
+    const strName = name as string;
+
     // Extrai o nome da métrica removendo o sufixo "_anterior" se existir
-    const metricName = name.replace(' (Período Anterior)', '');
+    const metricName = strName.replace(' (Período Anterior)', '');
     const metric = metricOptions.find(m => m.label === metricName);
 
     if (metric?.type === 'percentage') {
-      return `${value.toFixed(2)}%`;
+      return `${numValue.toFixed(2)}%`;
     }
 
-    return new Intl.NumberFormat('pt-BR').format(value);
+    return new Intl.NumberFormat('pt-BR').format(numValue);
   };
 
   const chartTitle = selectedMetrics.length === 1
@@ -270,16 +286,9 @@ const ImpressionsChart = ({
     <div className="bg-white rounded-lg shadow border border-gray-200 p-6 h-full flex flex-col">
       <div className="mb-4">
         <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-3">
-            <h2 className="text-lg font-semibold text-gray-800">
-              {chartTitle}
-            </h2>
-            {periodFilter === '7days' && propMaxAvailableDate && (
-              <span className="text-xs text-gray-400 font-normal">
-                último dado: {format(propMaxAvailableDate, 'dd/MM/yyyy')}
-              </span>
-            )}
-          </div>
+          <h2 className="text-lg font-semibold text-gray-800">
+            {chartTitle}
+          </h2>
 
           {/* Botão dropdown para seleção de métricas */}
           <div className="relative">
@@ -353,7 +362,7 @@ const ImpressionsChart = ({
 
       <div className="flex-1 min-h-[320px]">
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={chartData}>
+          <ComposedChart data={chartData as never[]}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
             <XAxis
               dataKey="date"

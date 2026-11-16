@@ -1,9 +1,7 @@
 import axios from 'axios';
+import { BENCHMARK_SHEETS, sheetUrl } from '../config/agency';
 
-const BENCHMARK_APIS = [
-  `${import.meta.env.DEV ? '/api-proxy' : 'https://nmbcoamazonia-api.vercel.app'}/google/sheets/1HykUxjCGGdveDS_5vlLOOkAq7Wkl058453xkYGTAzNM/data?range=Bench`,
-  `${import.meta.env.DEV ? '/api-proxy' : 'https://nmbcoamazonia-api.vercel.app'}/google/sheets/1abcar-ESRB_f8ytKGQ_ru_slZ67cXhjxKt8gL7TrEVw/data?range=Bench`
-];
+const BENCHMARK_APIS = BENCHMARK_SHEETS.map(s => sheetUrl(s.id, s.range));
 
 export interface BenchmarkData {
   veiculo: string;
@@ -149,6 +147,10 @@ const CACHE_DURATION = 5 * 60 * 1000; // 5 minutos
  */
 export const fetchAllBenchmarks = async (): Promise<Map<string, BenchmarkData>> => {
   // Verifica se o cache ainda é válido
+  // Sem planilha de benchmark configurada, os indicadores de comparação
+  // simplesmente não aparecem — o dashboard segue com o benchmark interno.
+  if (BENCHMARK_APIS.length === 0) return new Map();
+
   const now = Date.now();
   if (benchmarkCache && (now - lastFetchTime) < CACHE_DURATION) {
     return benchmarkCache;

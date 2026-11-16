@@ -11,79 +11,83 @@ import CreativeAnalysis from '../components/CreativeAnalysis';
 import ParticlesBackground from '../components/ParticlesBackground';
 import PIInfoCard from '../components/PIInfoCard';
 import Filters from '../components/Filters';
+import Footer from '../components/Footer';
 import ClientCampaignList from '../components/ClientCampaignList';
-import logoArtplan from '../images/logo-artplan.png';
-import { getClientLogo } from '../config/clientLogos';
+import SearchTermsAnalysis from '../components/SearchTermsAnalysis';
+import adDeskWhite from '../images/ad-desk-white.svg';
+import { subDays, startOfDay, format } from 'date-fns';
 import { toSlug } from '../utils/slug';
-import { subDays } from 'date-fns';
+import { toSearchTermsData } from '../utils/searchTerms';
+import { getClientLogo } from '../config/clientLogos';
 
 interface ClientHeaderProps {
   clientName: string;
   clientLogo?: string;
+  agencia: string;
   onOpenFilters: () => void;
   onClearFilters: () => void;
   activeFiltersCount: number;
 }
 
-const ClientHeader = ({ clientName, clientLogo, onOpenFilters, onClearFilters, activeFiltersCount }: ClientHeaderProps) => (
-  <header className="sticky top-0 z-30 bg-white shadow-sm border-b border-gray-200">
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-2 sm:gap-4 min-w-0">
-          <a href="/" title="Voltar para a visão da agência">
-            <img src={logoArtplan} alt="Artplan" className="h-8 sm:h-12 w-auto shrink-0" />
-          </a>
-          <div className="border-l border-gray-300 pl-2 sm:pl-4 min-w-0 flex items-center gap-3">
-            {clientLogo && (
-              <img src={clientLogo} alt={clientName} className="h-8 w-auto max-w-[140px] object-contain shrink-0" />
-            )}
-            <div className="min-w-0">
-              <h1 className="text-base sm:text-2xl font-bold text-gray-900 truncate">{clientName}</h1>
-              <p className="text-xs sm:text-sm text-gray-500 hidden sm:block">Painel de Campanhas</p>
+const ClientHeader = ({ clientName, clientLogo, agencia, onOpenFilters, onClearFilters, activeFiltersCount }: ClientHeaderProps) => (
+  <header className="w-full bg-[#153ece] rounded-[34px] px-8 py-6 mb-6">
+    <div className="flex items-center justify-between gap-4">
+      <div className="flex items-center gap-6 min-w-0">
+        <a href="/" title="Voltar para a visão da agência" className="shrink-0">
+          <img src={adDeskWhite} alt="AD Desk" className="h-14 w-auto" />
+        </a>
+        <div className="border-l border-white/30 pl-6 min-w-0 flex items-center gap-4">
+          {/* Logos de cliente têm fundo próprio, então vão numa base branca */}
+          {clientLogo && (
+            <div className="bg-white rounded-xl px-2 py-1 shrink-0">
+              <img src={clientLogo} alt={clientName} className="h-10 w-auto max-w-[120px] object-contain" />
             </div>
+          )}
+          <div className="min-w-0">
+            <h1 className="text-white font-bold text-xl sm:text-2xl leading-tight whitespace-nowrap">
+              {clientName}
+            </h1>
+            <p className="text-white/60 text-sm sm:text-base whitespace-nowrap mt-0.5">
+              Painel de Campanhas
+              {agencia && <span className="text-white/80"> | {agencia}</span>}
+            </p>
           </div>
         </div>
+      </div>
 
-        <div className="flex items-center gap-2 shrink-0">
-          {activeFiltersCount > 0 && (
-            <button
-              onClick={onClearFilters}
-              className="flex items-center justify-center w-10 h-10 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg transition-colors"
-              title="Limpar filtros"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          )}
+      <div className="flex items-center gap-3 shrink-0">
+        {activeFiltersCount > 0 && (
           <button
-            onClick={onOpenFilters}
-            className="relative flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+            onClick={onClearFilters}
+            className="flex items-center justify-center w-10 h-10 bg-white/20 hover:bg-white/30 text-white rounded-2xl transition-colors"
+            title="Limpar filtros"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
-            <span className="hidden sm:inline">Filtros</span>
-            {activeFiltersCount > 0 && (
-              <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full h-6 w-6 flex items-center justify-center">
-                {activeFiltersCount}
-              </span>
-            )}
           </button>
-        </div>
+        )}
+        <button
+          onClick={onOpenFilters}
+          className="relative flex items-center gap-2 px-5 py-2.5 bg-white/20 hover:bg-white/30 text-white rounded-2xl transition-colors font-medium text-sm whitespace-nowrap"
+        >
+          <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+          </svg>
+          <span className="hidden sm:inline">Filtros</span>
+          {activeFiltersCount > 0 && (
+            <span className="absolute -top-2 -right-2 bg-white text-[#153ece] text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
+              {activeFiltersCount}
+            </span>
+          )}
+        </button>
       </div>
     </div>
   </header>
 );
 
-const ClientDashboardContent = ({ slug }: { slug: string }) => {
-  const { loading, error, filteredData, filters, setFilters, data } = useCampaign();
-
-  const clientName = useMemo(
-    () => data.find(d => toSlug(d.cliente || '') === slug)?.cliente || slug.toUpperCase(),
-    [data, slug]
-  );
-  const clientLogo = getClientLogo(clientName);
+const ClientDashboardContent = ({ clientSlug }: { clientSlug: string }) => {
+  const { loading, error, filteredData, filters, setFilters, data, agencia } = useCampaign();
 
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   const [periodFilter, setPeriodFilter] = useState<'7days' | 'all'>('7days');
@@ -100,24 +104,46 @@ const ClientDashboardContent = ({ slug }: { slug: string }) => {
       campanha: [],
       numeroPi: null
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Todos os dados do cliente (respeitando filtros globais), excluindo o dia atual (D-1)
-  const clientData = useMemo(() => {
-    const yesterday = subDays(new Date(), 1);
-    return filteredData.filter(d => toSlug(d.cliente || '') === slug && d.date <= yesterday);
-  }, [filteredData, slug]);
+  // Resolve o nome do cliente a partir do slug usando os dados reais
+  const clientName = useMemo(() => {
+    const found = data.find(d => toSlug(d.cliente || '') === clientSlug);
+    return found?.cliente || clientSlug.toUpperCase();
+  }, [data, clientSlug]);
+  const clientLogo = getClientLogo(clientName);
 
+  // Todos os dados do cliente (sem filtro de período)
+  const clientData = useMemo(
+    () => filteredData.filter(d => toSlug(d.cliente || '') === clientSlug),
+    [filteredData, clientSlug]
+  );
+
+  // Base completa do cliente, ignorando os filtros — usada só no download.
+  // Parte de `data` (e não de `filteredData`) para escopar por cliente sem
+  // vazar dados dos demais clientes nesta tela.
+  const clientBaseData = useMemo(
+    () => data.filter(d => toSlug(d.cliente || '') === clientSlug),
+    [data, clientSlug]
+  );
+
+  // Data máxima normalizada para início do dia
   const maxAvailableDate = useMemo(() => {
-    if (clientData.length === 0) return subDays(new Date(), 1);
-    return new Date(Math.max(...clientData.map(d => d.date.getTime())));
+    const dates = clientData.map(d => d.date);
+    if (dates.length === 0) return startOfDay(new Date());
+    return startOfDay(new Date(Math.max(...dates.map(d => d.getTime()))));
   }, [clientData]);
 
+  // 7 dias atrás normalizado para início do dia
   const sevenDaysAgoFromMaxDate = useMemo(
-    () => subDays(maxAvailableDate, 7),
+    () => startOfDay(subDays(maxAvailableDate, 7)),
     [maxAvailableDate]
   );
+
+  const minAvailableDate = useMemo(() => {
+    if (clientData.length === 0) return new Date();
+    return new Date(Math.min(...clientData.map(d => d.date.getTime())));
+  }, [clientData]);
 
   const generalBenchmarks = useMemo(() => {
     const totalImp = data.reduce((s, i) => s + i.impressions, 0);
@@ -136,10 +162,11 @@ const ClientDashboardContent = ({ slug }: { slug: string }) => {
     const vMap = new Map<string, { imp: number; clk: number; vid: number; eng: number }>();
     data.forEach(item => {
       if (!item.veiculo) return;
-      const e = vMap.get(item.veiculo) ?? { imp: 0, clk: 0, vid: 0, eng: 0 };
+      const v = item.veiculo;
+      const e = vMap.get(v) ?? { imp: 0, clk: 0, vid: 0, eng: 0 };
       e.imp += item.impressions; e.clk += item.clicks;
       e.vid += item.videoCompletions; e.eng += item.totalEngagements;
-      vMap.set(item.veiculo, e);
+      vMap.set(v, e);
     });
     vMap.forEach((e, v) => {
       map.set(v, {
@@ -151,6 +178,7 @@ const ClientDashboardContent = ({ slug }: { slug: string }) => {
     return map;
   }, [data]);
 
+  // displayData: clientData com filtros de seleção (sem filtro de período — o gráfico faz isso internamente)
   const displayData = useMemo(() => {
     let d = clientData;
     if (periodFilter === '7days') d = d.filter(i => i.date >= sevenDaysAgoFromMaxDate);
@@ -162,7 +190,7 @@ const ClientDashboardContent = ({ slug }: { slug: string }) => {
 
   const previousPeriodMetrics = useMemo(() => {
     if (periodFilter !== '7days') return null;
-    const fourteenDaysAgo = subDays(maxAvailableDate, 14);
+    const fourteenDaysAgo = startOfDay(subDays(maxAvailableDate, 14));
     const prev = clientData.filter(i => i.date >= fourteenDaysAgo && i.date < sevenDaysAgoFromMaxDate);
     const totalInv = prev.reduce((s, i) => s + i.cost, 0);
     const totalImp = prev.reduce((s, i) => s + i.impressions, 0);
@@ -171,7 +199,7 @@ const ClientDashboardContent = ({ slug }: { slug: string }) => {
     const totalEng = prev.reduce((s, i) => s + i.totalEngagements, 0);
     const totalVidC = prev.reduce((s, i) => s + i.videoCompletions, 0);
     return {
-      investimento: totalInv, investimentoReal: totalInv,
+      investimento: totalInv, investimentoReal: 0,
       impressoes: totalImp, cliques: totalClk, views: totalVid, engajamento: totalEng,
       cpm: totalImp > 0 ? (totalInv / totalImp) * 1000 : 0,
       cpc: totalClk > 0 ? totalInv / totalClk : 0,
@@ -185,13 +213,14 @@ const ClientDashboardContent = ({ slug }: { slug: string }) => {
 
   const displayMetrics = useMemo(() => {
     const totalInv = displayData.reduce((s, i) => s + i.cost, 0);
+    const totalInvR = displayData.reduce((s, i) => s + (i.realInvestment || 0), 0);
     const totalImp = displayData.reduce((s, i) => s + i.impressions, 0);
     const totalClk = displayData.reduce((s, i) => s + i.clicks, 0);
     const totalVid = displayData.reduce((s, i) => s + i.videoViews, 0);
     const totalEng = displayData.reduce((s, i) => s + i.totalEngagements, 0);
     const totalVidC = displayData.reduce((s, i) => s + i.videoCompletions, 0);
     return {
-      investimento: totalInv, investimentoReal: totalInv,
+      investimento: totalInv, investimentoReal: totalInvR,
       impressoes: totalImp, cliques: totalClk, views: totalVid, engajamento: totalEng,
       cpm: totalImp > 0 ? (totalInv / totalImp) * 1000 : 0,
       cpc: totalClk > 0 ? totalInv / totalClk : 0,
@@ -202,6 +231,9 @@ const ClientDashboardContent = ({ slug }: { slug: string }) => {
       taxaEngajamento: totalImp > 0 ? (totalEng / totalImp) * 100 : 0
     };
   }, [displayData]);
+
+  // Termos de busca do Google Search para o card dedicado
+  const searchTermsData = useMemo(() => toSearchTermsData(displayData), [displayData]);
 
   const activeFiltersCount = useMemo(() => {
     let count = 0;
@@ -230,9 +262,9 @@ const ClientDashboardContent = ({ slug }: { slug: string }) => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-[#f1f1f1] flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-[#153ece]" />
           <p className="mt-4 text-gray-600">Carregando dados...</p>
         </div>
       </div>
@@ -241,30 +273,43 @@ const ClientDashboardContent = ({ slug }: { slug: string }) => {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-[#f1f1f1] flex items-center justify-center">
         <p className="text-red-600 text-lg">{error}</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 relative">
+    <div className="min-h-screen bg-[#f1f1f1] relative">
       <ParticlesBackground />
-      <div className="relative z-10">
+      <div className="relative z-10 max-w-[1440px] mx-auto px-3 sm:px-6 pt-3 sm:pt-6 pb-3 sm:pb-6">
         <ClientHeader
           clientName={clientName}
           clientLogo={clientLogo}
+          agencia={agencia}
           onOpenFilters={() => setIsFiltersOpen(true)}
           onClearFilters={handleClearFilters}
           activeFiltersCount={activeFiltersCount}
         />
-        <Filters isOpen={isFiltersOpen} onClose={() => setIsFiltersOpen(false)} />
+        <Filters
+          isOpen={isFiltersOpen}
+          onClose={() => setIsFiltersOpen(false)}
+          exportRows={clientBaseData}
+          exportFileName={`base-${clientSlug}`}
+        />
 
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <main>
           <div className="space-y-6">
+
+            {/* Período + comparação */}
             <div>
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3 gap-2">
-                <h2 className="text-xs sm:text-sm font-medium text-gray-600">Resultados</h2>
+                <h2 className="text-xs sm:text-sm font-medium text-gray-600">
+                  Resultados{' '}
+                  <span className="text-gray-400 font-normal">
+                    {format(periodFilter === '7days' ? sevenDaysAgoFromMaxDate : minAvailableDate, 'dd/MM/yyyy')} à {format(maxAvailableDate, 'dd/MM/yyyy')}
+                  </span>
+                </h2>
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-4 w-full sm:w-auto">
                   <div className="flex items-center gap-1 sm:gap-2">
                     <button
@@ -310,82 +355,73 @@ const ClientDashboardContent = ({ slug }: { slug: string }) => {
             </div>
 
             {selectedPI && (
-              <div>
-                <PIInfoCard
-                  numeroPi={selectedPI}
-                  campaignData={clientData.filter(d => d.numeroPi === selectedPI)}
-                />
-              </div>
+              <PIInfoCard
+                numeroPi={selectedPI}
+                campaignData={clientData.filter(d => d.numeroPi === selectedPI)}
+              />
             )}
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:items-stretch">
-              <div className="lg:col-span-4 flex">
-                <div className="w-full">
-                  <ClientCampaignList
-                    data={clientData}
-                    selectedPI={selectedPI}
-                    onSelectPI={setSelectedPI}
-                  />
-                </div>
-              </div>
-              <div className="lg:col-span-8 flex">
-                <div className="w-full">
-                  <ImpressionsChart
-                    data={displayData}
-                    allData={clientData}
-                    periodFilter={periodFilter}
-                    comparisonMode={comparisonMode}
-                    showComparison={periodFilter === '7days'}
-                    maxAvailableDate={maxAvailableDate}
-                    sevenDaysAgoFromMaxDate={sevenDaysAgoFromMaxDate}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <VehicleMetrics
-                data={displayData}
-                selectedCampaign={selectedCampaign}
-                periodFilter={periodFilter}
-                filters={filters}
-                vehicleBenchmarks={vehicleBenchmarks}
-                selectedVehicle={selectedVehicle}
-                onSelectVehicle={setSelectedVehicle}
+            {/* Campanhas/PIs (35%) + Gráfico (65%) lado a lado */}
+            <div className="grid grid-cols-1 lg:grid-cols-[35fr_65fr] gap-6 items-stretch">
+              <ClientCampaignList
+                data={clientData}
                 selectedPI={selectedPI}
+                onSelectPI={setSelectedPI}
               />
-            </div>
-
-            <div>
-              <AIAnalysis
-                data={displayData}
+              <ImpressionsChart
+                data={clientData}
                 allData={clientData}
                 periodFilter={periodFilter}
-                selectedCampaign={selectedCampaign}
+                comparisonMode={comparisonMode}
+                showComparison={periodFilter === '7days'}
+                maxAvailableDate={maxAvailableDate}
+                sevenDaysAgoFromMaxDate={sevenDaysAgoFromMaxDate}
               />
             </div>
 
-            <div>
-              <OnDemandAnalysis
-                data={displayData}
-                allData={clientData}
-                periodFilter={periodFilter}
-              />
-            </div>
+            <VehicleMetrics
+              data={displayData}
+              selectedCampaign={selectedCampaign}
+              periodFilter={periodFilter}
+              filters={filters}
+              vehicleBenchmarks={vehicleBenchmarks}
+              selectedVehicle={selectedVehicle}
+              onSelectVehicle={setSelectedVehicle}
+              selectedPI={selectedPI}
+            />
 
-            <div>
-              <CreativePerformance data={displayData} />
-            </div>
+            <AIAnalysis
+              data={displayData}
+              allData={clientData}
+              periodFilter={periodFilter}
+              selectedCampaign={selectedCampaign}
+            />
 
-            <div>
-              <CreativeAnalysis
-                data={displayData}
-                periodFilter={periodFilter}
-                selectedCampaign={selectedCampaign}
+            <OnDemandAnalysis
+              data={displayData}
+              allData={clientData}
+              periodFilter={periodFilter}
+            />
+
+            <CreativePerformance data={displayData} />
+
+            {searchTermsData.length > 0 && (
+              <SearchTermsAnalysis
+                data={searchTermsData}
+                selectedCampaign={null}
+                periodFilter="all"
               />
-            </div>
+            )}
+
+            <CreativeAnalysis
+              data={displayData}
+              periodFilter={periodFilter}
+              selectedCampaign={selectedCampaign}
+            />
           </div>
         </main>
+
+        <Footer />
       </div>
     </div>
   );
@@ -393,7 +429,7 @@ const ClientDashboardContent = ({ slug }: { slug: string }) => {
 
 const ClientDashboard = ({ slug }: { slug: string }) => (
   <CampaignProvider>
-    <ClientDashboardContent slug={slug} />
+    <ClientDashboardContent clientSlug={slug} />
   </CampaignProvider>
 );
 

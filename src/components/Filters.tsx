@@ -6,14 +6,26 @@ import 'react-date-range/dist/styles.css';
 import 'react-date-range/dist/theme/default.css';
 import './DateRangePicker.css';
 import { ptBR } from 'date-fns/locale';
+import { ProcessedCampaignData } from '../types/campaign';
+import { downloadCsv, downloadXlsx } from '../utils/exportData';
 
 interface FiltersProps {
   isOpen: boolean;
   onClose: () => void;
+  /**
+   * Conjunto a exportar. Quando omitido, exporta toda a base carregada.
+   * O contexto não é escopado por cliente, então telas de um cliente
+   * específico precisam passar o próprio recorte aqui.
+   */
+  exportRows?: ProcessedCampaignData[];
+  /** Base do nome do arquivo, sem data e sem extensão. */
+  exportFileName?: string;
 }
 
-const Filters = ({ isOpen, onClose }: FiltersProps) => {
+const Filters = ({ isOpen, onClose, exportRows, exportFileName }: FiltersProps) => {
   const { filters, setFilters, availableFilters, data } = useCampaign();
+
+  const [isExporting, setIsExporting] = useState<'csv' | 'xlsx' | null>(null);
 
   const [localFilters, setLocalFilters] = useState(filters);
   const [dateRange, setDateRange] = useState<Range[]>([
@@ -126,6 +138,34 @@ const Filters = ({ isOpen, onClose }: FiltersProps) => {
         key: 'selection'
       }
     ]);
+  };
+
+  // Download sempre da base completa — independente dos filtros aplicados.
+  const rowsToExport = exportRows ?? data;
+
+  const rowCountLabel = useMemo(
+    () => new Intl.NumberFormat('pt-BR').format(rowsToExport.length),
+    [rowsToExport.length]
+  );
+
+  const handleExport = (formato: 'csv' | 'xlsx') => {
+    if (rowsToExport.length === 0 || isExporting) return;
+    setIsExporting(formato);
+
+    // Deixa o React pintar o estado de "gerando" antes do trabalho pesado.
+    setTimeout(async () => {
+      try {
+        if (formato === 'csv') {
+          downloadCsv(rowsToExport, exportFileName);
+        } else {
+          await downloadXlsx(rowsToExport, exportFileName);
+        }
+      } catch (err) {
+        console.error('Erro ao gerar o arquivo:', err);
+      } finally {
+        setIsExporting(null);
+      }
+    }, 0);
   };
 
   const toggleArrayFilter = (key: 'veiculo' | 'tipoDeCompra' | 'campanha', value: string) => {
@@ -318,19 +358,53 @@ const Filters = ({ isOpen, onClose }: FiltersProps) => {
             </div>
           </div>
 
-          <div className="px-6 py-4 border-t border-gray-200 flex gap-3">
-            <button
-              onClick={handleClear}
-              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
-            >
-              Limpar
-            </button>
-            <button
-              onClick={handleApply}
-              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-            >
-              Aplicar
-            </button>
+          <div className="px-6 py-4 border-t border-gray-200 space-y-3">
+            <div>
+              <p className="text-xs font-medium text-gray-600 mb-2">
+                {rowsToExport.length === 0
+                  ? 'Nenhum dado para baixar'
+                  : `Baixar base completa (${rowCountLabel} ${rowsToExport.length === 1 ? 'linha' : 'linhas'})`}
+              </p>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => handleExport('csv')}
+                  disabled={rowsToExport.length === 0 || isExporting !== null}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  {isExporting === 'csv' ? 'Gerando...' : 'CSV'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleExport('xlsx')}
+                  disabled={rowsToExport.length === 0 || isExporting !== null}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  {isExporting === 'xlsx' ? 'Gerando...' : 'Excel'}
+                </button>
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-1 border-t border-gray-100">
+              <button
+                onClick={handleClear}
+                className="flex-1 mt-3 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+              >
+                Limpar
+              </button>
+              <button
+                onClick={handleApply}
+                className="flex-1 mt-3 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+              >
+                Aplicar
+              </button>
+            </div>
           </div>
         </div>
       </div>

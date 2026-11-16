@@ -39,7 +39,7 @@ const ClientCampaignList = ({ data, selectedPI, onSelectPI }: ClientCampaignList
       const impressoes = allItems.reduce((s, i) => s + i.impressions, 0);
       const cliques = allItems.reduce((s, i) => s + i.clicks, 0);
       const investimento = allItems.reduce((s, i) => s + i.cost, 0);
-      const isActive = allItems.some(i => i.date >= sevenDaysAgo && (i.impressions > 0 || i.clicks > 0) && i.cost > 0);
+      const isActive = allItems.some(i => i.date >= sevenDaysAgo && (i.impressions > 0 || i.clicks > 0 || i.videoViews > 0 || i.videoCompletions > 0 || i.totalEngagements > 0) && i.cost > 0);
 
       const piList = Array.from(pis.entries()).map(([pi, items]) => ({
         pi,
@@ -72,7 +72,7 @@ const ClientCampaignList = ({ data, selectedPI, onSelectPI }: ClientCampaignList
   if (campaigns.length === 0) return null;
 
   return (
-    <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden flex flex-col h-full">
+    <div className="bg-white rounded-[24px] overflow-hidden flex flex-col h-full">
       <div className="px-6 py-4 border-b border-gray-100 shrink-0">
         <h2 className="text-sm font-semibold text-gray-700">
           Campanhas ({campaigns.length})
@@ -104,7 +104,7 @@ const ClientCampaignList = ({ data, selectedPI, onSelectPI }: ClientCampaignList
                   rel="noopener noreferrer"
                   onClick={e => e.stopPropagation()}
                   title={`Ver dashboard de ${camp.nome}`}
-                  className="flex items-center justify-center w-6 h-6 rounded-lg bg-gray-100 hover:bg-blue-600 text-gray-400 hover:text-white transition-colors shrink-0"
+                  className="flex items-center justify-center w-6 h-6 rounded-lg bg-gray-100 hover:bg-[#153ece] text-gray-400 hover:text-white transition-colors shrink-0"
                 >
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -123,7 +123,7 @@ const ClientCampaignList = ({ data, selectedPI, onSelectPI }: ClientCampaignList
                 </div>
                 <div className="text-right">
                   <p className="text-xs text-gray-400">Investimento</p>
-                  <p className="text-sm font-semibold text-blue-600">{formatCurrency(camp.investimento)}</p>
+                  <p className="text-sm font-semibold text-[#153ece]">{formatCurrency(camp.investimento)}</p>
                 </div>
               </div>
             </button>
@@ -139,7 +139,7 @@ const ClientCampaignList = ({ data, selectedPI, onSelectPI }: ClientCampaignList
                       onClick={e => handlePIClick(pi.pi, e)}
                       className={`w-full px-6 py-3 flex items-center justify-between border-b border-gray-100 last:border-b-0 text-left transition-colors ${
                         isSelected
-                          ? 'bg-blue-50 border-l-4 border-l-blue-600'
+                          ? 'bg-[#153ece]/8 border-l-4 border-l-[#153ece]'
                           : 'hover:bg-gray-100'
                       }`}
                     >
@@ -148,8 +148,8 @@ const ClientCampaignList = ({ data, selectedPI, onSelectPI }: ClientCampaignList
                         <div className="flex items-center gap-2 min-w-0">
                           <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-semibold shrink-0 transition-colors ${
                             isSelected
-                              ? 'bg-blue-600 text-white'
-                              : 'bg-blue-100 text-blue-600'
+                              ? 'bg-[#153ece] text-white'
+                              : 'bg-[#153ece]/10 text-[#153ece]'
                           }`}>
                             PI {pi.pi}
                           </span>
@@ -162,7 +162,7 @@ const ClientCampaignList = ({ data, selectedPI, onSelectPI }: ClientCampaignList
                             rel="noopener noreferrer"
                             onClick={e => e.stopPropagation()}
                             title={`Ver dashboard do PI ${pi.pi}`}
-                            className="flex items-center justify-center w-6 h-6 rounded-lg bg-gray-100 hover:bg-blue-600 text-gray-400 hover:text-white transition-colors shrink-0"
+                            className="flex items-center justify-center w-6 h-6 rounded-lg bg-gray-100 hover:bg-[#153ece] text-gray-400 hover:text-white transition-colors shrink-0"
                           >
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -182,7 +182,7 @@ const ClientCampaignList = ({ data, selectedPI, onSelectPI }: ClientCampaignList
                         </div>
                         <div className="text-right">
                           <p className="text-xs text-gray-400">Investimento</p>
-                          <p className="text-xs font-semibold text-blue-600">{formatCurrency(pi.investimento)}</p>
+                          <p className="text-xs font-semibold text-[#153ece]">{formatCurrency(pi.investimento)}</p>
                         </div>
                       </div>
                     </button>

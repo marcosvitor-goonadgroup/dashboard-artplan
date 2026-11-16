@@ -1,7 +1,8 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { ProcessedCampaignData, Filters, CampaignSummary, CampaignMetrics } from '../types/campaign';
 import { fetchCampaignData } from '../services/api';
-import { subDays, isAfter } from 'date-fns';
+import { AGENCY_NAME } from '../config/agency';
+import { subDays, isAfter, startOfDay } from 'date-fns';
 
 interface CampaignContextType {
   data: ProcessedCampaignData[];
@@ -12,6 +13,7 @@ interface CampaignContextType {
   error: string | null;
   campaigns: CampaignSummary[];
   overallMetrics: CampaignMetrics;
+  agencia: string;
   availableFilters: {
     veiculos: string[];
     tiposDeCompra: string[];
@@ -55,8 +57,15 @@ export const CampaignProvider = ({ children }: CampaignProviderProps) => {
 
         const campaignData = await fetchCampaignData();
 
+        // Corte D-1: o dia corrente ainda está com entrega parcial, então só
+        // entram dados até ontem. Feito aqui uma vez para valer em todos os
+        // níveis (agência, cliente, campanha, PI) e em todos os componentes.
+        const today = startOfDay(new Date());
+
         // Remove linhas sem campanha definida
-        const filteredCampaignData = campaignData.filter(item => item.campanha && item.campanha.trim() !== '');
+        const filteredCampaignData = campaignData.filter(
+          item => item.campanha && item.campanha.trim() !== '' && item.date < today
+        );
 
         // Normaliza números de PI removendo zeros à esquerda
         const normalizedData = filteredCampaignData.map(item => {
@@ -64,10 +73,7 @@ export const CampaignProvider = ({ children }: CampaignProviderProps) => {
           if (normalizedPI) {
             normalizedPI = normalizedPI.replace(/^0+/, '') || '0';
           }
-          return {
-            ...item,
-            numeroPi: normalizedPI
-          };
+          return { ...item, numeroPi: normalizedPI };
         });
 
         setData(normalizedData);
@@ -148,7 +154,7 @@ export const CampaignProvider = ({ children }: CampaignProviderProps) => {
       const recentData = campanhaData.filter(d => isAfter(d.date, sevenDaysAgoFromToday));
 
       const isActive = recentData.some(
-        d => (d.impressions > 0 || d.clicks > 0 || d.videoViews > 0) && d.cost > 0
+        d => (d.impressions > 0 || d.clicks > 0 || d.videoViews > 0 || d.videoCompletions > 0 || d.totalEngagements > 0) && d.cost > 0
       );
 
       const lastActivity = campanhaData.reduce(
@@ -175,6 +181,9 @@ export const CampaignProvider = ({ children }: CampaignProviderProps) => {
     clientes: Array.from(new Set(data.map(d => d.cliente).filter(Boolean)))
   };
 
+  // Nome da agência: vem da planilha quando existir a coluna, senão da config.
+  const agencia = data.find(d => d.agencia && d.agencia.trim() !== '')?.agencia ?? AGENCY_NAME;
+
   return (
     <CampaignContext.Provider
       value={{
@@ -186,6 +195,7 @@ export const CampaignProvider = ({ children }: CampaignProviderProps) => {
         error,
         campaigns,
         overallMetrics,
+        agencia,
         availableFilters
       }}
     >
